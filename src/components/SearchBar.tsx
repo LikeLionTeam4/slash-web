@@ -344,9 +344,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
     if (commandMode) {
       if (e.key === 'Escape') {
+        // 두 단계로 나눈다 — 긴 검색어를 지우려고 Backspace를 오래 누르고 있을 이유가 없어야 하고,
+        // 그렇다고 오타 하나 고치려다 명령어까지 잃어버려서도 안 된다.
         e.preventDefault()
-        setCommandMode(null)
-        setValue('')
+        if (value !== '') setValue('')
+        else setCommandMode(null)
       } else if (e.key === 'Backspace' && value === '') {
         // 빈 입력창에서 Backspace = 한 단계씩 되돌린다 (CLI 지우기 감각).
         // 확정한 값 → … → 명령어 텍스트(`/네이버/길찾기`). 값이 없을 때 한 번 더 지우면 명령어 모드를
