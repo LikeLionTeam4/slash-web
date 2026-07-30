@@ -12,7 +12,7 @@ import {
 } from './ModelPickerPanel'
 import { parseCommandChain, mockPlaceholderMessage } from '../lib/mockCommands'
 import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
-import { getSuggestions, type CommandNode } from '../lib/commandTree'
+import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
 import { useLocalFileSearch } from '../hooks/useLocalFileSearch'
 
 function AddMenuItem({
@@ -46,11 +46,8 @@ type Attachment = {
   url?: string
 }
 
-/** 단계형 입력으로 들어가는 명령. 진입 조건과 되돌아갈 때 복원할 텍스트가 같은 값이어야 한다. */
-const ROUTE_COMMAND = '/네이버/길찾기'
-
-/** 길찾기 단계형 입력에서 확정된 값 하나를 나타내는 검색바 안쪽 칩. */
-function RouteChip({ label, onClear }: { label: string; onClear: () => void }) {
+/** 명령어가 이미 받은 값 하나를 나타내는 검색바 안쪽 칩. */
+function OperandChip({ label, onClear }: { label: string; onClear: () => void }) {
   return (
     <span className="flex items-center gap-1 rounded-full bg-accent-blue/12 py-1 pl-2.5 pr-1.5 text-xs font-medium text-accent-blue">
       {label}
@@ -66,7 +63,14 @@ function RouteChip({ label, onClear }: { label: string; onClear: () => void }) {
   )
 }
 
-export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
+/** 목적격 조사 — 받침이 있으면 '을', 없으면 '를'. ('검색어를 입력' / '파일 이름을 입력') */
+function withObjectParticle(noun: string): string {
+  const code = noun.charCodeAt(noun.length - 1)
+  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
+  return `${noun}${hasFinalConsonant ? '을' : '를'}`
+}
+
+export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -80,10 +84,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
   const [modelSearchPickerOpen, setModelSearchPickerOpen] = useState(false)
-  // `/네이버/길찾기`는 한 줄에서 출발·도착을 끊어내는 대신 단계별로 받는다.
-  // null = 길찾기 모드 아님 / start:null = 출발지 받는 중 / goal:null = 도착지 받는 중 /
-  // 둘 다 채워짐 = 백엔드로 보낼 값이 확정된 상태.
-  const [routeMode, setRouteMode] = useState<{ start: string | null; goal: string | null } | null>(null)
+  // 값을 받는 명령(`/네이버`, `/구글`, `/파일`, `/네이버/길찾기` …)은 명령어 텍스트를 입력창에
+  // 남겨두지 않고 칩으로 뺀다. path = 명령어 경로, operands = 이미 확정된 값(칩).
+  // 지금 입력 중인 값은 `value`에 있다 — 명령어와 검색어는 한 문자열로 합치지 않고 끝까지 따로
+  // 들고 있다가 백엔드에도 따로 보낸다.
+  const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const readOnlyFolderInputRef = useRef<HTMLInputElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
@@ -98,50 +103,74 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
   const trimmed = value.trim()
   const hasText = trimmed.length > 0
-  // 길찾기 단계형 입력 중에는 입력창에 명령어 텍스트가 남아 있지 않고(칩으로 빠져 있음) 지명만
-  // 들어있다 — 그래도 명령 모드이므로 `/` 배지는 파랗게, 자유입력 힌트는 뜨지 않게 해야 한다.
-  const isCommand = value.startsWith('/') || routeMode !== null
+  // 명령어 모드에서는 입력창에 명령어 텍스트가 남아 있지 않고(칩으로 빠져 있음) 값만 들어있다 —
+  // 그래도 명령 모드이므로 `/` 배지는 파랗게, 자유입력 힌트는 뜨지 않게 해야 한다.
+  const isCommand = value.startsWith('/') || commandMode !== null
   const isFreeText = hasText && !isCommand
   const hasAttachments = attachments.length > 0
-  const active = focused || hasText || routeMode !== null
+  const active = focused || hasText || commandMode !== null
   const shape = hasAttachments ? 'rounded-[28px]' : 'rounded-full'
 
-  const commandChain = isCommand ? parseCommandChain(value) : null
-  const suggestions = isCommand ? getSuggestions(value) : null
+  // 명령어가 받는 값들의 이름 — 하나면 한 번에 받고, 둘 이상이면 Enter마다 한 값씩 확정한다.
+  const operandNames = (commandMode ? findCommand(commandMode.path)?.operands : null) ?? []
+  const stepped = operandNames.length > 1
+  const nextOperandName: string | undefined = operandNames[commandMode?.operands.length ?? 0]
+  const operandsFilled = commandMode !== null && operandNames.length > 0 && nextOperandName === undefined
+
+  // 명령어 모드에서는 텍스트를 파싱하지 않는다 — 경로와 값이 이미 나뉘어 있으니 그대로 조립만 한다.
+  // (모드에 들어가지 않는 미등록 명령은 예전처럼 한 줄 텍스트에서 파싱한다.)
+  const commandChain =
+    commandMode !== null
+      ? hasText
+        ? { namespace: commandMode.path[0], action: commandMode.path[1] ?? '', query: trimmed }
+        : null
+      : isCommand
+        ? parseCommandChain(value)
+        : null
+  const suggestions = commandMode === null && isCommand ? getSuggestions(value) : null
   const isFileSearchCommand = commandChain?.namespace === '파일' && !commandChain.action
   const isModelSearchCommand = commandChain?.namespace === '모델' && commandChain.action === '검색'
   const placeholderMsg = commandChain ? mockPlaceholderMessage(commandChain) : null
   const deepLink = commandChain ? buildDeepLink(commandChain) : null
   const deepLinkHintText = commandChain ? deepLinkHint(commandChain) : null
-  const routeHint =
-    routeMode === null
+  // 값을 여러 개 받는 명령은 입력 중에도 "지금 무슨 값을 받는 중인지"를 계속 보여준다.
+  // 하나만 받는 명령은 값을 치기 시작하면 딥링크·준비중 안내에 자리를 넘긴다.
+  const commandModeHint =
+    commandMode === null
       ? null
-      : routeMode.start === null
-        ? '출발지를 입력하고 Enter를 눌러주세요.'
-        : routeMode.goal === null
-          ? '도착지를 입력하고 Enter를 눌러주세요.'
-          : `${routeMode.start} → ${routeMode.goal} · 아직 준비 중이에요.`
+      : operandsFilled
+        ? `${commandMode.operands.join(' → ')} · 아직 준비 중이에요.`
+        : stepped || !hasText
+          ? `${withObjectParticle(nextOperandName!)} 입력하고 Enter를 눌러주세요.`
+          : null
   const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
     MODELS_BY_SERVICE[selectedModel.service].find((m) => m.id === selectedModel.modelId)?.label ?? ''
 
-  const showModelPicker = trimmed === '/모델'
-  const showTrash = trimmed === '/파일/휴지통'
+  const showModelPicker = commandMode === null && trimmed === '/모델'
+  const showTrash = commandMode === null && trimmed === '/파일/휴지통'
   const showSuggestions = !!suggestions && !showModelPicker && !showTrash
   const showFileSearch = !showSuggestions && !showModelPicker && !showTrash && isFileSearchCommand
   const showModelSearch =
     !showSuggestions && !showModelPicker && !showTrash && !showFileSearch && isModelSearchCommand
+  const showCommandModeHint = !!commandModeHint
   const showPlaceholderMsg =
     !showSuggestions &&
     !showModelPicker &&
     !showTrash &&
     !showFileSearch &&
     !showModelSearch &&
+    !showCommandModeHint &&
     !!placeholderMsg
   const showDeepLinkHint =
-    !showSuggestions && !showModelPicker && !showTrash && !showFileSearch && !showModelSearch && !!deepLinkHintText
-  const showRouteHint = !!routeHint
+    !showSuggestions &&
+    !showModelPicker &&
+    !showTrash &&
+    !showFileSearch &&
+    !showModelSearch &&
+    !showCommandModeHint &&
+    !!deepLinkHintText
   const showCommandHint =
     !showSuggestions &&
     !showModelPicker &&
@@ -150,7 +179,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
     !showModelSearch &&
     !showPlaceholderMsg &&
     !showDeepLinkHint &&
-    !showRouteHint &&
+    !showCommandModeHint &&
     isCommand
   const modelPickerActive = showModelPicker || (showModelSearch && modelSearchPickerOpen)
 
@@ -159,10 +188,13 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   }, [value])
 
   // Suggestion chips on the home screen set a query in from the outside — the caller passes a new
-  // object each time (even for the same text), so this fires even on repeat clicks of one chip.
+  // object each time (even for the same value), so this fires even on repeat clicks of one chip.
+  // 칩도 명령어와 값을 따로 넘기므로 문자열을 만들었다가 다시 쪼갤 일이 없다. 마지막 값만 입력창에
+  // 남겨 바로 Enter를 칠 수 있게 하고, 앞의 값들은 확정된 칩으로 들어간다.
   useEffect(() => {
     if (!presetQuery) return
-    setValue(presetQuery.text)
+    setCommandMode({ path: presetQuery.path, operands: presetQuery.operands.slice(0, -1) })
+    setValue(presetQuery.operands[presetQuery.operands.length - 1] ?? '')
     textInputRef.current?.focus()
   }, [presetQuery])
 
@@ -182,19 +214,36 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
   function selectSuggestion(pathIds: string[], option: CommandNode) {
     const fullPath = [...pathIds, option.id]
-    if (`/${fullPath.join('/')}` === ROUTE_COMMAND) {
-      // 길찾기는 한 줄 쿼리 대신 단계형으로 받는다 — 명령어 텍스트는 칩으로 빠지고 입력창은 비운다.
-      setRouteMode({ start: null, goal: null })
+    if (option.operands) {
+      // 값을 받는 명령 — 명령어 텍스트는 칩으로 빠지고 입력창은 값만 받는다.
+      setCommandMode({ path: fullPath, operands: [] })
       setValue('')
-      return
-    }
-    if (option.children && !option.defaultAction) {
-      setValue(`/${fullPath.join('/')}/`)
     } else if (option.id === '모델') {
       setValue(`/${fullPath.join('/')}`)
     } else {
       setValue(`/${fullPath.join('/')} `)
     }
+  }
+
+  /**
+   * `/네이버 ` 처럼 등록된 명령 뒤에 공백을 치면 명령어를 칩으로 빼고 입력창에는 나머지만 남긴다.
+   * 붙여넣기(`/네이버/지도 강남역 맛집`)도 같은 경로로 들어온다. 해당 없으면 null.
+   */
+  function splitCommandFromText(text: string): { path: string[]; rest: string } | null {
+    const match = text.match(/^\/([^\s]+)\s(.*)$/)
+    if (!match) return null
+    const path = match[1].split('/')
+    return findCommand(path)?.operands ? { path, rest: match[2] } : null
+  }
+
+  function handleValueChange(next: string) {
+    const split = commandMode === null ? splitCommandFromText(next) : null
+    if (split) {
+      setCommandMode({ path: split.path, operands: [] })
+      setValue(split.rest)
+      return
+    }
+    setValue(next)
   }
 
   // 딥링크 명령(/네이버/지도, /네이버/길찾기)은 결과가 앱 밖 새 탭에서 열린다 — 이슈 #6의 방식 1.
@@ -204,13 +253,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   }
 
   function submitCommand() {
-    if (routeMode) {
-      const goal = value.trim()
-      if (routeMode.start === null || !goal) return
-      // TODO(#6): 출발지·도착지를 백엔드 길찾기 엔드포인트로 보내고 응답을 결과 패널에 렌더한다.
+    if (commandMode && stepped) {
+      // 값을 여러 개 받는 명령은 Enter마다 한 값씩 칩으로 확정한다. 마지막 값까지 모이면
+      // 명령어(`/네이버/길찾기`)와 값 배열이 그대로 백엔드에 보낼 수 있는 형태로 남는다.
+      // TODO(#6): { command, operands } 를 백엔드 길찾기 엔드포인트로 보내고 결과 패널에 렌더한다.
       // 딥링크로 넘기지 않기로 한 이유 — 이름만으로는 네이버가 경로를 계산해주지 않고(좌표 필요,
       // DESIGN.md §9), 결과가 앱 밖으로 나가면 스레드/히스토리에 남지 않는다.
-      setRouteMode({ start: routeMode.start, goal })
+      if (!hasText || operandsFilled) return
+      setCommandMode({ ...commandMode, operands: [...commandMode.operands, trimmed] })
       setValue('')
       return
     }
@@ -230,18 +280,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
       }
       return
     }
-    if (routeMode) {
-      const text = value.trim()
-      if (!text) return
-      if (routeMode.start === null) {
-        setRouteMode({ start: text, goal: null })
-        setValue('')
-      } else if (routeMode.goal === null) {
-        submitCommand()
-      }
-      return
-    }
-    if (deepLink) {
+    if (commandMode || deepLink) {
       submitCommand()
       return
     }
@@ -303,24 +342,22 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
       return
     }
 
-    // 길찾기 단계형 입력 — Enter는 다음 단계로 넘기고, 마지막 단계에서만 실제로 연다.
-    if (routeMode) {
+    if (commandMode) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        setRouteMode(null)
+        setCommandMode(null)
         setValue('')
       } else if (e.key === 'Backspace' && value === '') {
         // 빈 입력창에서 Backspace = 한 단계씩 되돌린다 (CLI 지우기 감각).
-        // 도착지 → 출발지 → 명령어(`/네이버/길찾기`). 마지막 단계에서 한 번 더 지우면 길찾기 모드를
-        // 빠져나가 명령어 텍스트로 복원하므로, 되돌리다 막다른 곳에 갇히지 않는다.
+        // 확정한 값 → … → 명령어 텍스트(`/네이버/길찾기`). 값이 없을 때 한 번 더 지우면 명령어 모드를
+        // 빠져나가 텍스트로 복원하므로, 되돌리다 막다른 곳에 갇히지 않는다.
         e.preventDefault()
-        if (routeMode.goal !== null) {
-          setRouteMode({ start: routeMode.start, goal: null })
-        } else if (routeMode.start !== null) {
-          setRouteMode({ start: null, goal: null })
+        if (commandMode.operands.length > 0) {
+          setCommandMode({ ...commandMode, operands: commandMode.operands.slice(0, -1) })
         } else {
-          setRouteMode(null)
-          setValue(ROUTE_COMMAND)
+          setCommandMode(null)
+          // 공백 없이 복원해야 한다 — 공백이 붙으면 곧바로 다시 명령어 모드로 들어간다.
+          setValue(`/${commandMode.path.join('/')}`)
         }
       }
       return
@@ -493,35 +530,29 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
             >
               /
             </span>
-            {routeMode && (
+            {commandMode && (
               <div className="flex shrink-0 items-center gap-1.5">
                 <span className="rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
-                  길찾기
+                  {commandMode.path.join('/')}
                 </span>
-                {routeMode.start !== null && (
-                  <RouteChip
-                    label={`출발 ${routeMode.start}`}
+                {commandMode.operands.map((operand, i) => (
+                  <OperandChip
+                    key={`${operandNames[i]}-${operand}`}
+                    label={`${operandNames[i]} ${operand}`}
+                    // 앞의 값을 지우면 그 뒤에 받은 값들도 함께 빠진다 — 순서가 곧 의미이므로
+                    // 중간만 비어 있는 상태를 만들지 않는다.
                     onClear={() => {
-                      setRouteMode({ start: null, goal: null })
+                      setCommandMode({ ...commandMode, operands: commandMode.operands.slice(0, i) })
                       textInputRef.current?.focus()
                     }}
                   />
-                )}
-                {routeMode.goal !== null && (
-                  <RouteChip
-                    label={`도착 ${routeMode.goal}`}
-                    onClear={() => {
-                      setRouteMode({ start: routeMode.start, goal: null })
-                      textInputRef.current?.focus()
-                    }}
-                  />
-                )}
+                ))}
               </div>
             )}
             <input
               ref={textInputRef}
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => handleValueChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               onKeyUp={handleInputKeyUp}
               onCompositionStart={() => {
@@ -536,12 +567,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
               placeholder={
                 isRecording
                   ? '듣고 있어요...'
-                  : routeMode
-                    ? routeMode.start === null
-                      ? '출발지 입력'
-                      : routeMode.goal === null
-                        ? '도착지 입력'
-                        : ''
+                  : commandMode
+                    ? nextOperandName
+                      ? `${nextOperandName} 입력`
+                      : ''
                     : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
               }
               className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-foreground placeholder:text-muted focus:outline-none"
@@ -956,7 +985,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
       {showDeepLinkHint && <p className="pl-4 text-left text-xs text-accent-blue">{deepLinkHintText}</p>}
 
-      {showRouteHint && <p className="pl-4 text-left text-xs text-accent-blue">{routeHint}</p>}
+      {showCommandModeHint && <p className="pl-4 text-left text-xs text-accent-blue">{commandModeHint}</p>}
 
       {showCommandHint && (
         <p className="pl-4 text-left text-xs text-accent-blue">
