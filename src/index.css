@@ -57,3 +57,13 @@ body {
     radial-gradient(circle at 90% 85%, rgba(74, 222, 128, 0.10), transparent 45%);
   background-attachment: fixed;
 }
+
+/* Tailwind v4의 preflight는 button에 cursor를 지정하지 않아 기본 화살표가 뜬다. 이 앱은 링크가
+   거의 없고 사이드바 항목·칩·메뉴까지 대부분의 조작이 <button>이라, 개별 클래스 대신 전역에서
+   한 번 잡는다. 비활성 버튼은 제외 — 눌리지 않는데 눌릴 것처럼 보이면 안 된다. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
