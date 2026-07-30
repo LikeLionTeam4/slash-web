@@ -79,3 +79,18 @@ source_context: "/Users/mimyo/projects/slash/slash-frontend/src/components/MicSe
 ```
 
 Introduced off-scale motion duration duration-75(75ms) in /Users/mimyo/projects/slash/slash-frontend/src/components/MicSettingsPopover.tsx — not in DESIGN.md motion scale
+
+## 2026-07-30T04:57:16.985Z — introduced-off-palette-color-s-4285f4-34
+
+```omd-meta
+id: pref_ms71kz3t_44ec3fda
+timestamp: 2026-07-30T04:57:16.985Z
+scope: color
+signal: ambient
+confidence: inferred
+status: pending
+source_agent: claude-code
+source_context: "/Users/mimyo/projects/slash/slash-frontend/src/features/auth/LoginPage.tsx"
+```
+
+Introduced off-palette color(s) #4285f4, #34a853, #fbbc05 in /Users/mimyo/projects/slash/slash-frontend/src/features/auth/LoginPage.tsx — not in DESIGN.md
