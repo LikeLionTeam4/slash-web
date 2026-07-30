@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
+import { homePathForSession, setLoggedIn } from '../../lib/auth'
 import { Mail } from 'lucide-react'
 
 type Step = 'email' | 'sent' | 'code'
@@ -30,16 +31,26 @@ export function LoginPage() {
   const handleCodeSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!code.trim()) return
+    completeLogin()
+  }
+
+  // TODO: 백엔드 연동 시 실제 인증으로 교체한다. 지금은 로그인 여부 플래그만 세운다.
+  const completeLogin = () => {
+    setLoggedIn()
     navigate('/new')
   }
 
   return (
     <div className="flex h-screen w-full bg-canvas font-sans text-foreground">
       <div className="flex w-full flex-col px-10 py-8 lg:w-1/2">
-        <div className="flex items-center gap-2 text-[15px] font-semibold">
+        <button
+          type="button"
+          onClick={() => navigate(homePathForSession())}
+          className="-mx-2 flex w-fit items-center gap-2 rounded-[8px] px-2 py-1 text-[15px] font-semibold transition-colors hover:bg-surface"
+        >
           <img src="/logo.png" alt="" className="h-7 w-7 rounded-[7px]" />
           Slash
-        </div>
+        </button>
 
         <div className="flex flex-1 flex-col items-center justify-center">
           <div className="w-full max-w-sm text-center">
@@ -51,7 +62,7 @@ export function LoginPage() {
                 <>
                   <button
                     type="button"
-                    onClick={() => navigate('/new')}
+                    onClick={completeLogin}
                     className="flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-surface px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-raised"
                   >
                     <GoogleIcon />

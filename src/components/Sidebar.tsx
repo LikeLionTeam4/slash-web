@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Command } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
+import { clearLogin, homePathForSession } from '../lib/auth'
 import { EXAMPLE_COMMANDS, exampleCommandText } from '../lib/exampleCommands'
 import { EMAIL } from '../lib/user'
 
@@ -45,10 +46,14 @@ export function Sidebar({
     >
       <div className="flex items-center justify-between px-3 pt-4">
         {!collapsed && (
-          <div className="flex items-center gap-2 px-1 text-[15px] font-semibold">
+          <button
+            type="button"
+            onClick={() => navigate(homePathForSession())}
+            className="-mx-1 flex items-center gap-2 rounded-[8px] px-2 py-1 text-[15px] font-semibold transition-colors hover:bg-surface-raised"
+          >
             <img src="/logo.png" alt="" className="h-6 w-6 rounded-[6px]" />
             Slash
-          </div>
+          </button>
         )}
         <Tooltip label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}>
           <button
@@ -154,7 +159,10 @@ export function Sidebar({
             onOpenShortcuts={onOpenShortcuts}
             // 뒤로 가기로 로그인 전 화면에 되돌아가지 않도록 히스토리를 남기지 않는다.
             // TODO: 백엔드 연동 시 여기서 세션/토큰 정리도 함께 한다.
-            onLogout={() => navigate('/login', { replace: true })}
+            onLogout={() => {
+              clearLogin()
+              navigate('/login', { replace: true })
+            }}
             onClose={() => setProfileMenuOpen(false)}
           />
         )}
