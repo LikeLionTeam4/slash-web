@@ -66,10 +66,12 @@ export function DashboardPage() {
         </div>
 
         <div className="mt-3 flex flex-col">
-          {recent.map((entry, i) => (
-            <div
-              key={`${entry.text}-${i}`}
-              className="flex items-center justify-between gap-4 border-b border-hairline px-2 py-3 text-sm"
+          {recent.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => navigate(`/chat/${entry.id}`)}
+              className="flex items-center justify-between gap-4 border-b border-hairline px-2 py-3 text-left text-sm transition-colors hover:bg-surface-raised"
             >
               <span className="flex min-w-0 items-center gap-2 text-foreground">
                 {entry.isCommand && (
@@ -80,7 +82,7 @@ export function DashboardPage() {
                 <span className="truncate">{entry.text}</span>
               </span>
               <span className="shrink-0 text-xs text-muted">{entry.timeLabel}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
