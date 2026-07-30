@@ -246,6 +246,18 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     setValue(next)
   }
 
+  /**
+   * 모델 확정 — 서비스 목록이 아니라 모델 목록에서 고른 순간에만 부른다.
+   * 모델 목록은 트리의 끝이라 여기서 Enter는 "더 들어가기"가 아니라 "고르기 끝"이어야 한다.
+   * 단독 `/모델` 피커는 입력창을 비워 스스로 닫고 바로 질문을 칠 수 있는 상태로 돌려준다.
+   * (`/모델/검색`의 인라인 피커는 이미 친 질문을 지우면 안 되므로 피커만 접는다.)
+   */
+  function selectModel(modelId: string) {
+    setSelectedModel({ service: modelView as Exclude<ModelView, 'services'>, modelId })
+    setModelSearchPickerOpen(false)
+    if (showModelPicker) setValue('')
+  }
+
   // 딥링크 명령(/네이버/지도, /네이버/길찾기)은 결과가 앱 밖 새 탭에서 열린다 — 이슈 #6의 방식 1.
   // window.open은 클릭/Enter 같은 사용자 제스처 안에서 호출해야 팝업 차단을 피할 수 있다.
   function openDeepLink(url: string) {
@@ -275,8 +287,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         setModelView(SERVICES[modelHighlight].id)
         setModelHighlight(0)
       } else {
-        setSelectedModel({ service: modelView, modelId: MODELS_BY_SERVICE[modelView][modelHighlight].id })
-        setModelSearchPickerOpen(false)
+        selectModel(MODELS_BY_SERVICE[modelView][modelHighlight].id)
       }
       return
     }
@@ -703,7 +714,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             setModelView(id)
             setModelHighlight(0)
           }}
-          onSelectModel={(modelId) => setSelectedModel({ service: modelView as Exclude<ModelView, 'services'>, modelId })}
+          onSelectModel={selectModel}
           onBack={() => {
             setModelView('services')
             setModelHighlight(0)
@@ -722,10 +733,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               setModelView(id)
               setModelHighlight(0)
             }}
-            onSelectModel={(modelId) => {
-              setSelectedModel({ service: modelView as Exclude<ModelView, 'services'>, modelId })
-              setModelSearchPickerOpen(false)
-            }}
+            onSelectModel={selectModel}
             onBack={() => {
               setModelView('services')
               setModelHighlight(0)
