@@ -41,9 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen font-sans text-foreground">
       <Sidebar onOpenSettings={openSettings} onOpenGuide={openGuide} onOpenShortcuts={openShortcuts} />
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8">
-        {children}
-      </main>
+      <main className="flex flex-1 flex-col items-center overflow-y-auto px-6 py-8">{children}</main>
       {settingsOpen && (
         <SettingsDialog
           theme={theme}

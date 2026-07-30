@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { AppShell } from './components/AppShell'
 import { HomePage } from './pages/HomePage'
+import { ChatDetailPage } from './pages/ChatDetailPage'
 
 function App() {
   return (
@@ -11,6 +12,14 @@ function App() {
         element={
           <AppShell>
             <HomePage />
+          </AppShell>
+        }
+      />
+      <Route
+        path="/chat/:id"
+        element={
+          <AppShell>
+            <ChatDetailPage />
           </AppShell>
         }
       />
