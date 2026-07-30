@@ -152,6 +152,9 @@ export function Sidebar({
             email={EMAIL}
             onOpenSettings={onOpenSettings}
             onOpenShortcuts={onOpenShortcuts}
+            // 뒤로 가기로 로그인 전 화면에 되돌아가지 않도록 히스토리를 남기지 않는다.
+            // TODO: 백엔드 연동 시 여기서 세션/토큰 정리도 함께 한다.
+            onLogout={() => navigate('/login', { replace: true })}
             onClose={() => setProfileMenuOpen(false)}
           />
         )}

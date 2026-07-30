@@ -57,11 +57,13 @@ export function ProfileMenu({
   email,
   onOpenSettings,
   onOpenShortcuts,
+  onLogout,
   onClose,
 }: {
   email: string
   onOpenSettings: () => void
   onOpenShortcuts: () => void
+  onLogout: () => void
   onClose: () => void
 }) {
   const [learnMoreOpen, setLearnMoreOpen] = useState(false)
@@ -138,7 +140,14 @@ export function ProfileMenu({
         </div>
 
         <div className="border-t border-hairline pt-1">
-          <MenuItem icon={LogOut} label="로그아웃" onClick={onClose} />
+          <MenuItem
+            icon={LogOut}
+            label="로그아웃"
+            onClick={() => {
+              onClose()
+              onLogout()
+            }}
+          />
         </div>
       </div>
     </>
