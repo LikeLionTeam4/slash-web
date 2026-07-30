@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-focus: var(--focus);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent-blue: #5b8cff;
+  --color-accent-purple: #9b6bff;
+  --color-accent-green: #34d399;
+
+  --font-sans: "Pretendard Variable", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Dark is the default theme (matches the original reference). */
+:root {
+  --canvas: #0a0c14;
+  --surface: #12141f;
+  --surface-raised: #181b2a;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --focus: rgba(93, 143, 255, 0.55);
+  --foreground: #f2f4f8;
+  --muted: #8b8fa3;
+}
+
+:root[data-theme='light'] {
+  --canvas: #f7f7fb;
+  --surface: #ffffff;
+  --surface-raised: #eef0f6;
+  --hairline: rgba(10, 12, 20, 0.08);
+  --focus: rgba(59, 130, 246, 0.5);
+  --foreground: #14151a;
+  --muted: #6b7280;
+}
+
+/* Brand mark gradient — the logo/hero "/" and the search bar's focus ring only.
+   Feature icons keep their own single-hue accents; don't spread this elsewhere.
+   Matches the app-icon's slash bar (red -> orange -> yellow -> green -> blue, no purple stop). */
+.brand-gradient {
+  background-image: linear-gradient(160deg, #ff4d4d 0%, #ff9a3d 25%, #ffd23d 45%, #4ade80 68%, #3b82f6 100%);
+}
+
+body {
+  background-color: var(--color-canvas);
+  transition: background-color 0.2s ease;
+}
+
+/* Dark mode: gradient stays confined to shapes/lines (hero mark, focus ring) — flat canvas otherwise.
+   Light mode: gradient shows up as a soft background wash instead. */
+:root[data-theme='light'] body {
+  background-image: radial-gradient(circle at 15% 0%, rgba(255, 95, 95, 0.10), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(255, 210, 61, 0.12), transparent 45%),
+    radial-gradient(circle at 15% 60%, rgba(59, 130, 246, 0.10), transparent 45%),
+    radial-gradient(circle at 90% 85%, rgba(74, 222, 128, 0.10), transparent 45%);
+  background-attachment: fixed;
+}
