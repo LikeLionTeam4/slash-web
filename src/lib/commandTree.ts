@@ -5,50 +5,41 @@ export type CommandNode = {
   label: string
   description: string
   children?: CommandNode[]
+  /** True if `/id` alone (no further segment) is itself a valid command — usually "search". */
+  defaultAction?: boolean
 }
 
+// Flattened (2026-07-30, later): "/" already implies "search", so a literal "검색" segment was
+// redundant everywhere it appeared. /파일/검색 → /파일 (파일's only other action, 휴지통, stays an
+// explicit child). /검색/네이버 and /날씨·/지도·/길찾기 under 네이버 collapsed into one 네이버 node —
+// bare /네이버 is search, and 날씨/지도/길찾기 are its children — since a service (네이버) always
+// means the same thing wherever it appears, unlike the old tree where "네이버" was sometimes the
+// top-level trigger and sometimes a child, depending on position. 구글 only ever searches, so it's
+// a bare leaf with no children needed.
 export const COMMAND_TREE: CommandNode[] = [
   {
     id: '파일',
     label: '파일',
-    description: '내 파일 관련 명령',
+    description: '선택한 폴더에서 파일 이름으로 검색',
+    defaultAction: true,
     children: [
-      { id: '검색', label: '검색', description: '선택한 폴더에서 파일 이름으로 검색' },
       { id: '휴지통', label: '휴지통', description: '삭제한 파일 보기 · 복원 · 완전 삭제' },
       { id: '기타기능', label: '기타기능', description: '준비 중이에요' },
     ],
   },
   { id: '모델', label: '모델', description: '답변에 사용할 AI 모델 선택' },
-  // Action-first (2026-07-30): 날씨/검색/지도/길찾기는 특정 서비스 고유 기능이 아니라
-  // 네이버·구글 등 여러 서비스가 똑같이 제공할 수 있는 범용 액션이라, 액션을 상위로 두고
-  // 그 아래에 "누가 해줄지"를 고른다. 파일/모델처럼 그 도메인만의 고유 기능은 도메인이 상위 그대로.
   {
-    id: '검색',
-    label: '검색',
-    description: '웹 검색을 어디로 할지 선택',
+    id: '네이버',
+    label: '네이버',
+    description: '네이버 통합검색',
+    defaultAction: true,
     children: [
-      { id: '네이버', label: '네이버', description: '네이버 통합검색' },
-      { id: '구글', label: '구글', description: '구글 검색' },
+      { id: '날씨', label: '날씨', description: '네이버 날씨' },
+      { id: '지도', label: '지도', description: '네이버 지도' },
+      { id: '길찾기', label: '길찾기', description: '네이버 길찾기' },
     ],
   },
-  {
-    id: '날씨',
-    label: '날씨',
-    description: '날씨를 어디로 확인할지 선택',
-    children: [{ id: '네이버', label: '네이버', description: '네이버 날씨' }],
-  },
-  {
-    id: '지도',
-    label: '지도',
-    description: '지도를 어디로 볼지 선택',
-    children: [{ id: '네이버', label: '네이버', description: '네이버 지도' }],
-  },
-  {
-    id: '길찾기',
-    label: '길찾기',
-    description: '길찾기를 어디로 할지 선택',
-    children: [{ id: '네이버', label: '네이버', description: '네이버 길찾기' }],
-  },
+  { id: '구글', label: '구글', description: '구글 검색' },
 ]
 
 export type Suggestions = { pathIds: string[]; options: CommandNode[] }

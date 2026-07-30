@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import { Sidebar } from './Sidebar'
 import { SettingsDialog, DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
