@@ -79,7 +79,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
   const commandChain = isCommand ? parseCommandChain(value) : null
   const suggestions = isCommand ? getSuggestions(value) : null
-  const isFileSearchCommand = commandChain?.namespace === '파일' && commandChain.action === '검색'
+  const isFileSearchCommand = commandChain?.namespace === '파일' && !commandChain.action
   const isModelSearchCommand = commandChain?.namespace === '모델' && commandChain.action === '검색'
   const placeholderMsg = commandChain ? mockPlaceholderMessage(commandChain) : null
   const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
@@ -138,7 +138,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
   function selectSuggestion(pathIds: string[], option: CommandNode) {
     const fullPath = [...pathIds, option.id]
-    if (option.children) {
+    if (option.children && !option.defaultAction) {
       setValue(`/${fullPath.join('/')}/`)
     } else if (option.id === '모델') {
       setValue(`/${fullPath.join('/')}`)
