@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Command } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
@@ -15,9 +16,9 @@ const RECENTS: RecentEntry[] = [
   { text: '면접 예상 질문 정리해줘', isCommand: false },
 ]
 
-const NAV_ITEMS = [
-  { icon: History, label: '히스토리' },
-  { icon: LayoutDashboard, label: '대시보드' },
+const NAV_ITEMS: { icon: typeof History; label: string; path?: string }[] = [
+  { icon: History, label: '히스토리', path: '/history' },
+  { icon: LayoutDashboard, label: '대시보드', path: '/dashboard' },
   { icon: Star, label: '즐겨찾기' },
   { icon: FolderClosed, label: '파일' },
 ]
@@ -33,6 +34,8 @@ export function Sidebar({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   return (
     <aside
@@ -73,18 +76,22 @@ export function Sidebar({
       </div>
 
       <nav className="flex flex-col gap-0.5 px-3 pt-3">
-        {NAV_ITEMS.map(({ icon: Icon, label }) => (
-          <button
-            key={label}
-            type="button"
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-raised hover:text-foreground ${
-              collapsed ? 'justify-center' : ''
-            }`}
-          >
-            <Icon size={17} />
-            {!collapsed && label}
-          </button>
-        ))}
+        {NAV_ITEMS.map(({ icon: Icon, label, path }) => {
+          const active = path !== undefined && location.pathname === path
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={path ? () => navigate(path) : undefined}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                active ? 'bg-foreground/8 text-foreground' : 'text-muted hover:bg-surface-raised hover:text-foreground'
+              } ${collapsed ? 'justify-center' : ''}`}
+            >
+              <Icon size={17} />
+              {!collapsed && label}
+            </button>
+          )
+        })}
         <button
           type="button"
           onClick={onOpenGuide}
