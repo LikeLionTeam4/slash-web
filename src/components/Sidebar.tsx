@@ -4,18 +4,8 @@ import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Command 
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
 import { clearLogin, homePathForSession } from '../lib/auth'
-import { EXAMPLE_COMMANDS, exampleCommandText } from '../lib/exampleCommands'
+import { RECENT_ENTRIES } from '../lib/mockHistory'
 import { EMAIL } from '../lib/user'
-
-type RecentEntry = { text: string; isCommand: boolean }
-
-// Mirrors the home screen's example commands (as if the user had just tried each one), plus a
-// couple of free-text queries so both search modes are visible side by side in "최근".
-const RECENTS: RecentEntry[] = [
-  ...EXAMPLE_COMMANDS.map((cmd): RecentEntry => ({ text: exampleCommandText(cmd), isCommand: true })),
-  { text: '요즘 뜨는 넷플릭스 드라마 추천해줘', isCommand: false },
-  { text: '면접 예상 질문 정리해줘', isCommand: false },
-]
 
 const NAV_ITEMS: { icon: typeof History; label: string; path?: string }[] = [
   { icon: History, label: '히스토리', path: '/history' },
@@ -71,12 +61,13 @@ export function Sidebar({
       <div className="px-3 pt-4">
         <button
           type="button"
+          onClick={() => navigate('/new')}
           className={`flex w-full items-center gap-2 rounded-lg bg-foreground/8 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground/12 ${
             collapsed ? 'justify-center' : ''
           }`}
         >
           <Plus size={16} />
-          {!collapsed && '새 검색'}
+          {!collapsed && '새 채팅'}
         </button>
       </div>
 
@@ -115,10 +106,11 @@ export function Sidebar({
         <div className="mt-4 flex-1 overflow-y-auto px-3">
           <p className="px-3 pb-1 text-xs font-medium text-muted">최근</p>
           <div className="flex flex-col gap-0.5">
-            {RECENTS.map((item) => (
+            {RECENT_ENTRIES.map((item) => (
               <button
-                key={item.text}
+                key={item.id}
                 type="button"
+                onClick={() => navigate(`/chat/${item.id}`)}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
               >
                 {item.isCommand && (
