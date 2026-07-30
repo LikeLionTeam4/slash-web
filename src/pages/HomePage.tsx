@@ -7,7 +7,7 @@ export function HomePage() {
   const [preset, setPreset] = useState<{ text: string } | undefined>(undefined)
 
   return (
-    <div className="flex w-full max-w-3xl flex-col items-center text-center">
+    <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center text-center">
       <h1 className="text-4xl font-bold tracking-tight">무엇을 도와드릴까요, {NICKNAME}?</h1>
       <p className="mt-3 text-muted">파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.</p>
 
