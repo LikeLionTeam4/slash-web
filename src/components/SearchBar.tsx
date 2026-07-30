@@ -11,6 +11,7 @@ import {
   type SelectedModel,
 } from './ModelPickerPanel'
 import { parseCommandChain, mockPlaceholderMessage } from '../lib/mockCommands'
+import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, type CommandNode } from '../lib/commandTree'
 import { useLocalFileSearch } from '../hooks/useLocalFileSearch'
 
@@ -45,6 +46,26 @@ type Attachment = {
   url?: string
 }
 
+/** 단계형 입력으로 들어가는 명령. 진입 조건과 되돌아갈 때 복원할 텍스트가 같은 값이어야 한다. */
+const ROUTE_COMMAND = '/네이버/길찾기'
+
+/** 길찾기 단계형 입력에서 확정된 값 하나를 나타내는 검색바 안쪽 칩. */
+function RouteChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="flex items-center gap-1 rounded-full bg-accent-blue/12 py-1 pl-2.5 pr-1.5 text-xs font-medium text-accent-blue">
+      {label}
+      <button
+        type="button"
+        aria-label={`${label} 지우기`}
+        onClick={onClear}
+        className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-accent-blue/20"
+      >
+        <X size={11} />
+      </button>
+    </span>
+  )
+}
+
 export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -59,6 +80,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
   const [modelSearchPickerOpen, setModelSearchPickerOpen] = useState(false)
+  // `/네이버/길찾기`는 한 줄에서 출발·도착을 끊어내는 대신 단계별로 받는다.
+  // null = 길찾기 모드 아님 / start:null = 출발지 받는 중 / goal:null = 도착지 받는 중 /
+  // 둘 다 채워짐 = 백엔드로 보낼 값이 확정된 상태.
+  const [routeMode, setRouteMode] = useState<{ start: string | null; goal: string | null } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const readOnlyFolderInputRef = useRef<HTMLInputElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
@@ -68,13 +93,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   // must NOT also trigger our own Enter handling, or the last character doubles.
   const isComposingRef = useRef(false)
   const compositionEndedAtRef = useRef(0)
+  // 조합 확정에 먹힌 Enter가 있었는지 — 같은 키의 keyup에서 실제 동작을 실행하기 위한 표시.
+  const pendingEnterRef = useRef(false)
 
   const trimmed = value.trim()
   const hasText = trimmed.length > 0
-  const isCommand = value.startsWith('/')
+  // 길찾기 단계형 입력 중에는 입력창에 명령어 텍스트가 남아 있지 않고(칩으로 빠져 있음) 지명만
+  // 들어있다 — 그래도 명령 모드이므로 `/` 배지는 파랗게, 자유입력 힌트는 뜨지 않게 해야 한다.
+  const isCommand = value.startsWith('/') || routeMode !== null
   const isFreeText = hasText && !isCommand
   const hasAttachments = attachments.length > 0
-  const active = focused || hasText
+  const active = focused || hasText || routeMode !== null
   const shape = hasAttachments ? 'rounded-[28px]' : 'rounded-full'
 
   const commandChain = isCommand ? parseCommandChain(value) : null
@@ -82,6 +111,16 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
   const isFileSearchCommand = commandChain?.namespace === '파일' && !commandChain.action
   const isModelSearchCommand = commandChain?.namespace === '모델' && commandChain.action === '검색'
   const placeholderMsg = commandChain ? mockPlaceholderMessage(commandChain) : null
+  const deepLink = commandChain ? buildDeepLink(commandChain) : null
+  const deepLinkHintText = commandChain ? deepLinkHint(commandChain) : null
+  const routeHint =
+    routeMode === null
+      ? null
+      : routeMode.start === null
+        ? '출발지를 입력하고 Enter를 눌러주세요.'
+        : routeMode.goal === null
+          ? '도착지를 입력하고 Enter를 눌러주세요.'
+          : `${routeMode.start} → ${routeMode.goal} · 아직 준비 중이에요.`
   const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
@@ -100,6 +139,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
     !showFileSearch &&
     !showModelSearch &&
     !!placeholderMsg
+  const showDeepLinkHint =
+    !showSuggestions && !showModelPicker && !showTrash && !showFileSearch && !showModelSearch && !!deepLinkHintText
+  const showRouteHint = !!routeHint
   const showCommandHint =
     !showSuggestions &&
     !showModelPicker &&
@@ -107,6 +149,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
     !showFileSearch &&
     !showModelSearch &&
     !showPlaceholderMsg &&
+    !showDeepLinkHint &&
+    !showRouteHint &&
     isCommand
   const modelPickerActive = showModelPicker || (showModelSearch && modelSearchPickerOpen)
 
@@ -138,6 +182,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
 
   function selectSuggestion(pathIds: string[], option: CommandNode) {
     const fullPath = [...pathIds, option.id]
+    if (`/${fullPath.join('/')}` === ROUTE_COMMAND) {
+      // 길찾기는 한 줄 쿼리 대신 단계형으로 받는다 — 명령어 텍스트는 칩으로 빠지고 입력창은 비운다.
+      setRouteMode({ start: null, goal: null })
+      setValue('')
+      return
+    }
     if (option.children && !option.defaultAction) {
       setValue(`/${fullPath.join('/')}/`)
     } else if (option.id === '모델') {
@@ -147,15 +197,76 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
     }
   }
 
+  // 딥링크 명령(/네이버/지도, /네이버/길찾기)은 결과가 앱 밖 새 탭에서 열린다 — 이슈 #6의 방식 1.
+  // window.open은 클릭/Enter 같은 사용자 제스처 안에서 호출해야 팝업 차단을 피할 수 있다.
+  function openDeepLink(url: string) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  function submitCommand() {
+    if (routeMode) {
+      const goal = value.trim()
+      if (routeMode.start === null || !goal) return
+      // TODO(#6): 출발지·도착지를 백엔드 길찾기 엔드포인트로 보내고 응답을 결과 패널에 렌더한다.
+      // 딥링크로 넘기지 않기로 한 이유 — 이름만으로는 네이버가 경로를 계산해주지 않고(좌표 필요,
+      // DESIGN.md §9), 결과가 앱 밖으로 나가면 스레드/히스토리에 남지 않는다.
+      setRouteMode({ start: routeMode.start, goal })
+      setValue('')
+      return
+    }
+    if (!deepLink) return
+    openDeepLink(deepLink)
+  }
+
+  /** Enter가 하는 일을 한 곳에 모아둔다 — keydown과 (조합 확정 시) keyup 양쪽에서 부른다. */
+  function runEnterAction() {
+    if (modelPickerActive) {
+      if (modelView === 'services') {
+        setModelView(SERVICES[modelHighlight].id)
+        setModelHighlight(0)
+      } else {
+        setSelectedModel({ service: modelView, modelId: MODELS_BY_SERVICE[modelView][modelHighlight].id })
+        setModelSearchPickerOpen(false)
+      }
+      return
+    }
+    if (routeMode) {
+      const text = value.trim()
+      if (!text) return
+      if (routeMode.start === null) {
+        setRouteMode({ start: text, goal: null })
+        setValue('')
+      } else if (routeMode.goal === null) {
+        submitCommand()
+      }
+      return
+    }
+    if (deepLink) {
+      submitCommand()
+      return
+    }
+    if (suggestions) {
+      selectSuggestion(suggestions.pathIds, suggestions.options[highlightIndex] ?? suggestions.options[0])
+    }
+  }
+
   function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
-      // Some browsers still report isComposing:false on the very Enter keydown that confirms
-      // an IME composition (a known cross-browser quirk) — the ref + short grace window catches
-      // that case too, so a completed Hangul/Japanese/Chinese syllable never doubles.
+      // 한글/일본어/중국어는 마지막 음절이 조합 중인 채로 Enter를 맞는다. 그 Enter로 여기서 바로
+      // 상태를 바꾸면 조합 중이던 글자가 중복 입력된다(예전 "검색" 버그). 그렇다고 그냥 버리면
+      // 한글 입력은 항상 Enter를 두 번 눌러야 한다.
+      // → 같은 키의 keyup으로 미룬다. 그때는 조합이 이미 확정됐고, keyup도 사용자 제스처라
+      //   window.open이 팝업 차단에 걸리지도 않는다.
+      // (일부 브라우저는 조합을 확정하는 바로 그 keydown에서도 isComposing:false를 보고하므로
+      //  ref와 짧은 유예 시간까지 함께 본다.)
       const justFinishedComposing = Date.now() - compositionEndedAtRef.current < 50
       if (e.nativeEvent.isComposing || isComposingRef.current || justFinishedComposing) {
+        pendingEnterRef.current = true
         return
       }
+      e.preventDefault()
+      runEnterAction()
+      return
     }
 
     if (modelPickerActive) {
@@ -166,15 +277,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         setModelHighlight((i) => (i - 1 + list.length) % list.length)
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-        if (modelView === 'services') {
-          setModelView(SERVICES[modelHighlight].id)
-          setModelHighlight(0)
-        } else {
-          setSelectedModel({ service: modelView, modelId: MODELS_BY_SERVICE[modelView][modelHighlight].id })
-          setModelSearchPickerOpen(false)
-        }
       } else if (e.key === 'ArrowRight' && modelView === 'services') {
         // → drills into the highlighted service, same as Enter would at this level.
         e.preventDefault()
@@ -201,6 +303,29 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
       return
     }
 
+    // 길찾기 단계형 입력 — Enter는 다음 단계로 넘기고, 마지막 단계에서만 실제로 연다.
+    if (routeMode) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setRouteMode(null)
+        setValue('')
+      } else if (e.key === 'Backspace' && value === '') {
+        // 빈 입력창에서 Backspace = 한 단계씩 되돌린다 (CLI 지우기 감각).
+        // 도착지 → 출발지 → 명령어(`/네이버/길찾기`). 마지막 단계에서 한 번 더 지우면 길찾기 모드를
+        // 빠져나가 명령어 텍스트로 복원하므로, 되돌리다 막다른 곳에 갇히지 않는다.
+        e.preventDefault()
+        if (routeMode.goal !== null) {
+          setRouteMode({ start: routeMode.start, goal: null })
+        } else if (routeMode.start !== null) {
+          setRouteMode({ start: null, goal: null })
+        } else {
+          setRouteMode(null)
+          setValue(ROUTE_COMMAND)
+        }
+      }
+      return
+    }
+
     if (!suggestions) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -208,12 +333,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHighlightIndex((i) => (i - 1 + suggestions.options.length) % suggestions.options.length)
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      selectSuggestion(suggestions.pathIds, suggestions.options[highlightIndex] ?? suggestions.options[0])
     } else if (e.key === 'Escape') {
       setValue('')
     }
+  }
+
+  /** 조합 확정에 먹힌 Enter를 여기서 이어받는다 — 조합이 끝난 값 기준으로 한 번만 실행된다. */
+  function handleInputKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter' || !pendingEnterRef.current) return
+    pendingEnterRef.current = false
+    e.preventDefault()
+    runEnterAction()
   }
 
   function removeAttachment(id: string) {
@@ -363,11 +493,37 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
             >
               /
             </span>
+            {routeMode && (
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
+                  길찾기
+                </span>
+                {routeMode.start !== null && (
+                  <RouteChip
+                    label={`출발 ${routeMode.start}`}
+                    onClear={() => {
+                      setRouteMode({ start: null, goal: null })
+                      textInputRef.current?.focus()
+                    }}
+                  />
+                )}
+                {routeMode.goal !== null && (
+                  <RouteChip
+                    label={`도착 ${routeMode.goal}`}
+                    onClear={() => {
+                      setRouteMode({ start: routeMode.start, goal: null })
+                      textInputRef.current?.focus()
+                    }}
+                  />
+                )}
+              </div>
+            )}
             <input
               ref={textInputRef}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={handleInputKeyDown}
+              onKeyUp={handleInputKeyUp}
               onCompositionStart={() => {
                 isComposingRef.current = true
               }}
@@ -377,7 +533,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
               }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder={isRecording ? '듣고 있어요...' : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"}
+              placeholder={
+                isRecording
+                  ? '듣고 있어요...'
+                  : routeMode
+                    ? routeMode.start === null
+                      ? '출발지 입력'
+                      : routeMode.goal === null
+                        ? '도착지 입력'
+                        : ''
+                    : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
+              }
               className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-foreground placeholder:text-muted focus:outline-none"
             />
             <div className="group relative flex shrink-0 items-center">
@@ -423,6 +589,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
                 <button
                   type="button"
                   aria-label="검색"
+                  onClick={submitCommand}
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:brightness-110 ${
                     isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/12 text-foreground'
                   }`}
@@ -786,6 +953,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { text: string } }) {
       )}
 
       {showPlaceholderMsg && <p className="pl-4 text-left text-xs text-muted">{placeholderMsg}</p>}
+
+      {showDeepLinkHint && <p className="pl-4 text-left text-xs text-accent-blue">{deepLinkHintText}</p>}
+
+      {showRouteHint && <p className="pl-4 text-left text-xs text-accent-blue">{routeHint}</p>}
 
       {showCommandHint && (
         <p className="pl-4 text-left text-xs text-accent-blue">
