@@ -39,7 +39,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => navigate(homePathForSession())}
-            className="-mx-1 flex items-center gap-2 rounded-[8px] px-2 py-1 text-[15px] font-semibold transition-colors hover:bg-surface-raised"
+            className="-mx-1 flex items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface-raised"
           >
             <img src="/logo.png" alt="" className="h-6 w-6 rounded-[6px]" />
             Slash
@@ -114,7 +114,7 @@ export function Sidebar({
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
               >
                 {item.isCommand && (
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-[10px] font-semibold text-white">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
                     /
                   </span>
                 )}

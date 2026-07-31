@@ -1,5 +1,6 @@
 import { X, User, Shield, CreditCard, BarChart2, Puzzle, Cog, Monitor, Sun, Moon, ChevronDown } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
+import type { FontSize } from '../hooks/useFontSize'
 
 const CATEGORIES = [
   { id: 'general', label: '일반', icon: Cog },
@@ -23,15 +24,27 @@ const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] =
   { id: 'dark', icon: Moon, label: '다크' },
 ]
 
+// 모양은 아이콘만으로 뜻이 통하지만 크기는 그렇지 않아 글자 라벨을 쓴다. 라벨 자체도 함께
+// 커지므로 고른 결과가 그 자리에서 바로 보인다.
+const FONT_SIZE_OPTIONS: { id: FontSize; label: string }[] = [
+  { id: 'normal', label: '보통' },
+  { id: 'large', label: '크게' },
+  { id: 'x-large', label: '매우 크게' },
+]
+
 export function SettingsDialog({
   theme,
   onThemeChange,
+  fontSize,
+  onFontSizeChange,
   active,
   onActiveChange,
   onClose,
 }: {
   theme: Theme
   onThemeChange: (theme: Theme) => void
+  fontSize: FontSize
+  onFontSizeChange: (size: FontSize) => void
   active: SettingsCategoryId
   onActiveChange: (id: SettingsCategoryId) => void
   onClose: () => void
@@ -123,6 +136,24 @@ export function SettingsDialog({
                         }`}
                       >
                         <Icon size={15} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-muted">글씨 크기</span>
+                  <div className="flex gap-1 rounded-lg border border-hairline p-1">
+                    {FONT_SIZE_OPTIONS.map(({ id, label }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => onFontSizeChange(id)}
+                        className={`rounded-[8px] px-3 py-1 text-sm transition-colors ${
+                          fontSize === id ? 'bg-foreground/12 text-foreground' : 'text-muted hover:text-foreground'
+                        }`}
+                      >
+                        {label}
                       </button>
                     ))}
                   </div>

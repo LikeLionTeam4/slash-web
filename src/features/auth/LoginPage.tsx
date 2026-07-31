@@ -46,7 +46,7 @@ export function LoginPage() {
         <button
           type="button"
           onClick={() => navigate(homePathForSession())}
-          className="-mx-2 flex w-fit items-center gap-2 rounded-[8px] px-2 py-1 text-[15px] font-semibold transition-colors hover:bg-surface"
+          className="-mx-2 flex w-fit items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface"
         >
           <img src="/logo.png" alt="" className="h-7 w-7 rounded-[7px]" />
           Slash

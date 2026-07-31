@@ -5,6 +5,7 @@ import { SettingsDialog, DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId } from 
 import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { useTheme } from '../hooks/useTheme'
+import { useFontSize } from '../hooks/useFontSize'
 
 const SETTINGS_HASH_PREFIX = '#settings/'
 const GUIDE_HASH = '#guide'
@@ -12,6 +13,7 @@ const SHORTCUTS_HASH = '#shortcuts'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { theme, setTheme } = useTheme()
+  const { fontSize, setFontSize } = useFontSize()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -46,6 +48,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SettingsDialog
           theme={theme}
           onThemeChange={setTheme}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
           active={settingsCategory}
           onActiveChange={changeSettingsCategory}
           onClose={closeSettings}

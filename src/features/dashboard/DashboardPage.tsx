@@ -75,7 +75,7 @@ export function DashboardPage() {
             >
               <span className="flex min-w-0 items-center gap-2 text-foreground">
                 {entry.isCommand && (
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-[10px] font-semibold text-white">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
                     /
                   </span>
                 )}

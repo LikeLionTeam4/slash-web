@@ -529,7 +529,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-surface-raised p-1">
                       <FileText size={18} className="text-muted" />
-                      <span className="w-full truncate text-center text-[10px] text-muted">{a.name}</span>
+                      <span className="w-full truncate text-center text-2xs text-muted">{a.name}</span>
                     </div>
                   )}
                   <button
@@ -596,7 +596,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                       : ''
                     : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
               }
-              className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-foreground placeholder:text-muted focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-control font-medium text-foreground placeholder:text-muted focus:outline-none"
             />
             <div className="group relative flex shrink-0 items-center">
               <Tooltip label="마이크 설정">

@@ -67,7 +67,7 @@ export function ChatDetailPage() {
                     <span className="block truncate text-sm text-foreground">{item.attachment.name}</span>
                     <span className="block text-xs text-muted">{item.attachment.meta}</span>
                   </span>
-                  <span className="shrink-0 rounded-md bg-foreground/8 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                  <span className="shrink-0 rounded-md bg-foreground/8 px-1.5 py-0.5 text-2xs font-medium text-muted">
                     {item.attachment.format}
                   </span>
                 </div>
@@ -76,7 +76,7 @@ export function ChatDetailPage() {
             </div>
           ) : (
             <div key={item.id} className="max-w-2xl">
-              <p className="whitespace-pre-line text-[15px] leading-relaxed text-foreground">{item.text}</p>
+              <p className="whitespace-pre-line text-control leading-relaxed text-foreground">{item.text}</p>
 
               {item.content?.type === 'file-results' && (
                 <div className="mt-3 flex flex-col gap-2">

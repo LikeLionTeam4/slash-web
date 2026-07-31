@@ -18,7 +18,7 @@ function KeyCombo({ keys }: { keys: string[] }) {
       {keys.map((k) => (
         <span
           key={k}
-          className="flex h-5 min-w-[20px] items-center justify-center rounded-[6px] bg-foreground/8 px-1 font-mono text-[11px] text-muted"
+          className="flex h-5 min-w-[20px] items-center justify-center rounded-[6px] bg-foreground/8 px-1 font-mono text-2xs text-muted"
         >
           {k}
         </span>
