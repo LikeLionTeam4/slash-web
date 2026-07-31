@@ -64,6 +64,9 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
   )
 }
 
+/** 파일 검색 결과를 접어둘 때 보여줄 개수. */
+const COLLAPSED_FILE_RESULTS = 10
+
 /** 목적격 조사 — 받침이 있으면 '을', 없으면 '를'. ('검색어를 입력' / '파일 이름을 입력') */
 function withObjectParticle(noun: string): string {
   const code = noun.charCodeAt(noun.length - 1)
@@ -82,6 +85,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const [holdToRecord, setHoldToRecord] = useState(true)
   const [highlightIndex, setHighlightIndex] = useState(0)
   const [fileHighlight, setFileHighlight] = useState(0)
+  const [fileListExpanded, setFileListExpanded] = useState(false)
   const [modelView, setModelView] = useState<ModelView>('services')
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
@@ -92,6 +96,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // 들고 있다가 백엔드에도 따로 보낸다.
   const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileListRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const fileSearch = useFileSearch()
@@ -148,6 +153,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           : null
   const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
   const hasSearchFolders = fileSearch.folders.length > 0 || fileSearch.readOnlyFolders.length > 0
+  // 결과가 많을 수 있으므로 처음에는 위에서 10개만 — 패널이 화면을 다 덮으면 검색어를 고쳐 칠 수가
+  // 없다. 나머지는 '더 보기'로 펼치고, 펼친 목록은 그 안에서 스크롤된다.
+  const visibleFileResults = fileListExpanded ? fileResults : fileResults.slice(0, COLLAPSED_FILE_RESULTS)
+  const hiddenFileCount = fileResults.length - visibleFileResults.length
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
     MODELS_BY_SERVICE[selectedModel.service].find((m) => m.id === selectedModel.modelId)?.label ?? ''
@@ -200,7 +209,13 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   useEffect(() => {
     setHighlightIndex(0)
     setFileHighlight(0)
+    setFileListExpanded(false)
   }, [value])
+
+  // 펼친 목록은 스크롤되므로, 키보드로 고른 줄이 화면 밖에 있으면 따라 들어와야 한다.
+  useEffect(() => {
+    fileListRef.current?.querySelector(`[data-file-index="${fileHighlight}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [fileHighlight])
 
   // Suggestion chips on the home screen set a query in from the outside — the caller passes a new
   // object each time (even for the same value), so this fires even on repeat clicks of one chip.
@@ -388,8 +403,19 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     // 파일 결과 위아래로 옮기기. 명령어 모드 안에서 도는 목록이라 아래 commandMode 처리보다 먼저 본다.
     if (showFileSearch && fileResults.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault()
-      const step = e.key === 'ArrowDown' ? 1 : -1
-      setFileHighlight((i) => (i + step + fileResults.length) % fileResults.length)
+      const visible = visibleFileResults.length
+      if (e.key === 'ArrowUp') {
+        setFileHighlight((i) => (i - 1 + visible) % visible)
+        return
+      }
+      // 접어둔 마지막 줄에서 한 번 더 내리면 나머지를 펼친다 — 키보드만으로도 11번째에 닿아야 한다.
+      const next = fileHighlight + 1
+      if (next >= visible && hiddenFileCount > 0) {
+        setFileListExpanded(true)
+        setFileHighlight(next)
+      } else {
+        setFileHighlight(next >= visible ? 0 : next)
+      }
       return
     }
 
@@ -823,46 +849,60 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                   시스템 파일은 검색에서 제외했어요: {fileSearch.systemFilesSkipped.join(', ')}
                 </p>
               )}
-              {fileResults.map((f, i) => (
-                <div
-                  key={`${f.folderName}/${f.path}`}
-                  // 마우스를 올리면 키보드 하이라이트도 같이 옮긴다 — 두 방식이 서로 다른 항목을
-                  // 가리키면 Enter가 어디로 갈지 알 수 없다 (자동완성·모델 피커와 같은 규칙).
-                  onMouseEnter={() => setFileHighlight(i)}
-                  className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
-                    i === fileHighlight ? 'bg-foreground/8' : ''
-                  }`}
-                >
-                  <FileText size={16} className="shrink-0 text-muted" />
-                  <button
-                    type="button"
-                    onClick={() => fileSearch.openFile(f.folderName, f.path)}
-                    title="파일 열기"
-                    className="min-w-0 flex-1 truncate text-left text-foreground transition-colors hover:text-accent-blue"
+              <div ref={fileListRef} className={fileListExpanded ? 'max-h-64 overflow-y-auto' : undefined}>
+                {visibleFileResults.map((f, i) => (
+                  <div
+                    key={`${f.folderName}/${f.path}`}
+                    data-file-index={i}
+                    // 마우스를 올리면 키보드 하이라이트도 같이 옮긴다 — 두 방식이 서로 다른 항목을
+                    // 가리키면 Enter가 어디로 갈지 알 수 없다 (자동완성·모델 피커와 같은 규칙).
+                    onMouseEnter={() => setFileHighlight(i)}
+                    className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                      i === fileHighlight ? 'bg-foreground/8' : ''
+                    }`}
                   >
-                    {f.name}
-                  </button>
-                  <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
-                    {f.folderName}/{f.path}
-                  </span>
-                  {!f.readOnly && (
+                    <FileText size={16} className="shrink-0 text-muted" />
                     <button
                       type="button"
-                      aria-label={`${f.name} 휴지통으로 이동`}
-                      title="휴지통으로 이동"
-                      onClick={() => {
-                        if (window.confirm(`'${f.name}'을(를) 휴지통으로 옮길까요? '/파일/휴지통'에서 다시 복원할 수 있어요.`)) {
-                          fileSearch.deleteFile(f.folderName, f.path)
-                        }
-                      }}
-                      className="shrink-0 text-muted transition-colors hover:text-accent-blue"
+                      onClick={() => fileSearch.openFile(f.folderName, f.path)}
+                      title="파일 열기"
+                      className="min-w-0 flex-1 truncate text-left text-foreground transition-colors hover:text-accent-blue"
                     >
-                      <Trash2 size={15} />
+                      {f.name}
                     </button>
-                  )}
-                </div>
-              ))}
-              <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">↑ ↓ 로 고르고 Enter로 열어요</p>
+                    <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
+                      {f.folderName}/{f.path}
+                    </span>
+                    {!f.readOnly && (
+                      <button
+                        type="button"
+                        aria-label={`${f.name} 휴지통으로 이동`}
+                        title="휴지통으로 이동"
+                        onClick={() => {
+                          if (window.confirm(`'${f.name}'을(를) 휴지통으로 옮길까요? '/파일/휴지통'에서 다시 복원할 수 있어요.`)) {
+                            fileSearch.deleteFile(f.folderName, f.path)
+                          }
+                        }}
+                        className="shrink-0 text-muted transition-colors hover:text-accent-blue"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {hiddenFileCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setFileListExpanded(true)}
+                  className="flex w-full items-center justify-center gap-1 border-t border-hairline px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-foreground/6 hover:text-foreground"
+                >
+                  <ChevronDown size={14} />
+                  {hiddenFileCount}개 더 보기
+                </button>
+              ) : (
+                <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">↑ ↓ 로 고르고 Enter로 열어요</p>
+              )}
             </>
           )}
           {fileSearch.error && (
