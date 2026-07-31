@@ -120,6 +120,8 @@ Shared across both themes:
 - **Accent Green** (`#34d399`): safety/privacy iconography.
 - **Brand Gradient** (`#ff4d4d → #ff9a3d → #ffd23d → #4ade80 → #3b82f6`, 160deg): the logo, the hero `/` mark, and the search bar's focus ring. In light mode it additionally appears as a soft low-opacity background wash — see `tokens.brand-gradient` in the frontmatter.
 
+**Third-party brand marks are exempt from the palette** (2026-07-31): the "Google로 계속하기" button's `G` icon (`LoginPage.tsx`) renders Google's official four-color mark (`#4285F4`/`#34A853`/`#FBBC05`/`#EA4335`) as-is. Unlike the model-picker's service icons (§4, recolored to `currentColor` via CSS mask), Google's mark is trademarked in these exact colors and can't be reskinned to the app palette — this is standard OAuth-button practice, not a palette violation. Don't extend this exemption to marks that don't require it.
+
 ### Do
 
 - Reserve the three single-hue accents for their one assigned concept each (blue=search, purple=AI, green=safety); don't reuse them as generic UI decoration elsewhere.
