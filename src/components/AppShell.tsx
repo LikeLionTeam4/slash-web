@@ -2,11 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft } from 'lucide-react'
 import { Sidebar } from './Sidebar'
-import { SettingsDialog, DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId } from './SettingsDialog'
+import { SettingsDialog, DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId, type SettingsCategoryId } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { useAppearance } from '../hooks/appearanceContext'
 import { FileSearchProvider } from '../hooks/fileSearchContext'
+import { AgentStatusProvider } from '../hooks/agentStatusContext'
 
 const SETTINGS_HASH_PREFIX = '#settings/'
 const GUIDE_HASH = '#guide'
@@ -25,8 +26,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const settingsCategory =
     settingsCategoryRaw && isSettingsCategoryId(settingsCategoryRaw) ? settingsCategoryRaw : DEFAULT_SETTINGS_CATEGORY
 
-  const openSettings = () =>
-    navigate({ pathname: location.pathname, hash: `${SETTINGS_HASH_PREFIX}${DEFAULT_SETTINGS_CATEGORY}` })
+  const openSettings = (category: SettingsCategoryId = DEFAULT_SETTINGS_CATEGORY) =>
+    navigate({ pathname: location.pathname, hash: `${SETTINGS_HASH_PREFIX}${category}` })
   const closeSettings = () => navigate({ pathname: location.pathname }, { replace: true })
   const changeSettingsCategory = (id: string) =>
     navigate({ pathname: location.pathname, hash: `${SETTINGS_HASH_PREFIX}${id}` }, { replace: true })
@@ -46,6 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <FileSearchProvider>
+      <AgentStatusProvider>
       <div className="flex h-screen font-sans text-foreground">
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -79,6 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
         {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
       </div>
+      </AgentStatusProvider>
     </FileSearchProvider>
   )
 }

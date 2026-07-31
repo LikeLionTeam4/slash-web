@@ -1,9 +1,28 @@
-import { useMemo, useRef } from 'react'
-import { X, User, Shield, CreditCard, BarChart2, Puzzle, Cog, Monitor, Sun, Moon, ChevronDown, FolderClosed } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import {
+  X,
+  User,
+  Shield,
+  CreditCard,
+  BarChart2,
+  Puzzle,
+  Cog,
+  Monitor,
+  Sun,
+  Moon,
+  ChevronDown,
+  FolderClosed,
+  Plus,
+  Pencil,
+  Download,
+  Info,
+} from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 import type { FontSize } from '../hooks/useFontSize'
 import { useFileSearch } from '../hooks/fileSearchContext'
+import { useAgentStatus } from '../hooks/agentStatusContext'
 import { getClientInfo } from '../lib/clientInfo'
+import { Tooltip } from './Tooltip'
 
 const CATEGORIES = [
   { id: 'general', label: '일반', icon: Cog },
@@ -61,6 +80,168 @@ function ClientInfo() {
           </div>
         ))}
       </div>
+    </>
+  )
+}
+
+const MAX_DEVICES = 5
+
+interface RegisteredDevice {
+  id: string
+  name: string
+  registeredAt: string
+  isThisDevice?: boolean
+}
+
+// slash-agent가 아직 없어서 실제로 페어링된 적 없는 목업 데이터. "이 PC"로 표시된 한 대만
+// useAgentStatus()의 실시간 값을 반영한다 — 다른 등록 PC의 상태는 이 브라우저가 알 방법이 없다
+// (다른 물리적 기기의 localhost는 애초에 닿지 않는다).
+const INITIAL_DEVICES: RegisteredDevice[] = [
+  { id: 'device-1', name: '메인컴', registeredAt: '2023.12.27', isThisDevice: true },
+  { id: 'device-2', name: '서브', registeredAt: '2025.08.29' },
+]
+
+function todayLabel(): string {
+  const d = new Date()
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 지정 PC 관리. 브라우저 요청을 실제로 받아 백엔드에 대신 요청하는 로컬 에이전트가 이 PC에
+// 설치·실행 중인지 확인하고, 이 계정으로 접속 가능한 PC 목록을 관리하는 자리.
+function PcManagement() {
+  const agentStatus = useAgentStatus()
+  const [devices, setDevices] = useState<RegisteredDevice[]>(INITIAL_DEVICES)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  const addDevice = () => {
+    if (devices.length >= MAX_DEVICES) return
+    setDevices((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: `PC ${prev.length + 1}`, registeredAt: todayLabel() },
+    ])
+  }
+
+  const removeDevice = (id: string) => setDevices((prev) => prev.filter((d) => d.id !== id))
+
+  const renameDevice = (id: string, name: string) =>
+    setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, name: name.trim() || d.name } : d)))
+
+  return (
+    <>
+      <div className="mb-1 flex items-center justify-between gap-3 pr-8">
+        <h2 className="flex items-center gap-1.5 text-lg font-semibold">
+          지정 PC 관리
+          <Tooltip label="이 계정으로 접속할 수 있는 PC를 등록하고 관리해요.">
+            <Info size={14} className="text-muted" />
+          </Tooltip>
+        </h2>
+        <button
+          type="button"
+          onClick={addDevice}
+          disabled={devices.length >= MAX_DEVICES}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15 disabled:pointer-events-none disabled:opacity-40"
+        >
+          <Plus size={14} />
+          PC 기기 등록
+        </button>
+      </div>
+      <p className="mb-4 text-xs text-muted">
+        등록된 PC 기기 현황과, 이 PC의 로컬 에이전트가 정상 동작 중인지 확인할 수 있어요.
+      </p>
+
+      <div className="rounded-xl border border-hairline p-4">
+        <p className="mb-3 text-sm font-semibold">
+          등록현황 {devices.length}/{MAX_DEVICES}
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          {devices.map((d) => (
+            <div key={d.id} className="flex items-center gap-2.5 rounded-lg border border-hairline px-3 py-2">
+              <Tooltip
+                label={
+                  d.isThisDevice
+                    ? agentStatus === 'online'
+                      ? '로컬 에이전트 정상 동작 중'
+                      : '로컬 에이전트가 꺼져있어요'
+                    : '다른 기기 — 이 브라우저에서는 상태를 알 수 없어요'
+                }
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    d.isThisDevice ? (agentStatus === 'online' ? 'bg-accent-green' : 'bg-muted') : 'bg-muted/30'
+                  }`}
+                />
+              </Tooltip>
+
+              <div className="min-w-0 flex-1">
+                {renamingId === d.id ? (
+                  <input
+                    autoFocus
+                    defaultValue={d.name}
+                    onBlur={(e) => {
+                      renameDevice(d.id, e.target.value)
+                      setRenamingId(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') setRenamingId(null)
+                    }}
+                    className="w-full rounded-[6px] border border-hairline bg-canvas px-1.5 py-0.5 text-sm text-foreground focus:outline-none"
+                  />
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium text-foreground">{d.name}</span>
+                    {d.isThisDevice && (
+                      <span className="shrink-0 rounded-[4px] bg-foreground/8 px-1.5 py-0.5 text-2xs text-muted">
+                        이 PC
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`${d.name} 이름 변경`}
+                      onClick={() => setRenamingId(d.id)}
+                      className="shrink-0 text-muted transition-colors hover:text-foreground"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
+                )}
+                <p className="text-2xs text-muted">
+                  {d.registeredAt}
+                  {d.isThisDevice && ` · 에이전트 ${agentStatus === 'online' ? '정상 동작 중' : '꺼져있음'}`}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                aria-label={`${d.name} 삭제`}
+                onClick={() => removeDevice(d.id)}
+                className="shrink-0 text-muted transition-colors hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* slash-agent에 아직 실제 배포판이 없어서, 지금은 릴리스가 올라올 실제 장소로 보낸다 —
+          클릭해도 아무 일도 안 일어나는 죽은 버튼보다, 어디로 가는지 정직한 링크가 낫다. */}
+      <a
+        href="https://github.com/LikeLionTeam4/slash-agent/releases"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted transition-colors hover:text-foreground"
+      >
+        <Download size={13} />
+        에이전트 다운로드
+      </a>
+
+      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-muted">
+        <li>PC는 최대 {MAX_DEVICES}대까지 등록할 수 있어요.</li>
+        <li>등록되지 않은 PC에서는 접속이 제한돼요.</li>
+        <li>이 브라우저가 설치된 PC(이 PC)만 로컬 에이전트 상태를 실시간으로 확인할 수 있어요 — 다른 PC의 상태는 여기서 보이지 않아요.</li>
+      </ul>
     </>
   )
 }
@@ -325,6 +506,10 @@ export function SettingsDialog({
           ) : active === 'files' ? (
             <div className="flex flex-col gap-6">
               <SearchFolders />
+            </div>
+          ) : active === 'plugins' ? (
+            <div className="flex flex-col gap-6">
+              <PcManagement />
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted">
