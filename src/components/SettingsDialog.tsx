@@ -1,11 +1,13 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { X, User, Shield, CreditCard, BarChart2, Puzzle, Cog, Monitor, Sun, Moon, ChevronDown, FolderClosed } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 import type { FontSize } from '../hooks/useFontSize'
 import { useFileSearch } from '../hooks/fileSearchContext'
+import { getClientInfo } from '../lib/clientInfo'
 
 const CATEGORIES = [
   { id: 'general', label: '일반', icon: Cog },
+  { id: 'files', label: '파일', icon: FolderClosed },
   { id: 'account', label: '계정', icon: User },
   { id: 'privacy', label: '개인정보 보호', icon: Shield },
   { id: 'billing', label: '결제', icon: CreditCard },
@@ -33,6 +35,35 @@ const FONT_SIZE_OPTIONS: { id: FontSize; label: string }[] = [
   { id: 'large', label: '크게' },
   { id: 'x-large', label: '매우 크게' },
 ]
+
+const CLIENT_INFO_ROWS: { key: keyof ReturnType<typeof getClientInfo>; label: string }[] = [
+  { key: 'timeZone', label: '타임존' },
+  { key: 'os', label: '운영체제' },
+  { key: 'browser', label: '브라우저' },
+  { key: 'language', label: '언어' },
+  { key: 'resolution', label: '화면 해상도' },
+]
+
+// 브라우저가 스스로 아는 값을 참고용으로 보여주는 자리. 표시 전용이라 여기서 값을 바꿀 방법은 없다 —
+// 실제 동작을 이 값에 따라 바꿔야 한다면 백엔드가 요청 헤더로 별도 판단해야 한다 (src/lib/clientInfo.ts).
+function ClientInfo() {
+  const info = useMemo(() => getClientInfo(), [])
+
+  return (
+    <>
+      <h3 className="mb-1 text-sm font-semibold">이 기기</h3>
+      <p className="mb-3 text-xs text-muted">브라우저가 알려주는 값이에요 — 참고용으로만 보여드려요.</p>
+      <div className="flex flex-col">
+        {CLIENT_INFO_ROWS.map(({ key, label }) => (
+          <div key={key} className="flex items-center justify-between border-b border-hairline py-2 last:border-b-0">
+            <span className="text-sm text-muted">{label}</span>
+            <span className="text-sm text-foreground">{info[key]}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
 
 /**
  * `/파일` 검색이 뒤질 폴더를 미리 정해두는 곳. 검색할 때마다 폴더를 고르게 하면 검색 한 번에
@@ -288,8 +319,12 @@ export function SettingsDialog({
               </div>
 
               <div className="mt-6 border-t border-hairline pt-5">
-                <SearchFolders />
+                <ClientInfo />
               </div>
+            </div>
+          ) : active === 'files' ? (
+            <div className="flex flex-col gap-6">
+              <SearchFolders />
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Calendar, Command } from 'lucide-react'
+import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
 import { clearLogin, homePathForSession } from '../lib/auth'
@@ -31,7 +31,6 @@ const NAV_ITEMS: { icon: typeof History; label: string; path?: string }[] = [
   { icon: History, label: '히스토리', path: '/history' },
   { icon: LayoutDashboard, label: '대시보드', path: '/dashboard' },
   { icon: Star, label: '즐겨찾기' },
-  { icon: FolderClosed, label: '파일' },
   { icon: Calendar, label: '일정' },
 ]
 
