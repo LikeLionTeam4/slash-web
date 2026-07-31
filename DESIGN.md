@@ -188,7 +188,7 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
 
 **Sidebar (app shell)**
 - Structural pattern only — borrowed from Claude's app shell layout (sidebar collapse behavior, settings-as-modal access), not its colors/copy/content. Own tokens throughout (surface/hairline/foreground/muted).
-- Expanded width 260px, collapsed to a 68px icon-only rail via a header toggle button; content transitions (labels fade/disappear), no reflow jank.
+- **Two different behaviors by width** (2026-07-31): at `md` and up (≥768px) the sidebar is inline — expanded 260px, collapsed to a 68px icon-only rail via its header toggle, content transitions with no reflow jank. Below that it is an off-canvas drawer: hidden entirely, opened by a single `PanelLeft` button pinned at the top-left of the main pane, closed by the scrim, `Escape`, the sidebar's own header toggle, or navigating anywhere. **The 68px rail does not exist on mobile** — a rail earns its place by leaving room for content beside it, which a phone doesn't have, so the only states there are open and closed. The breakpoint lives in JS too (`DESKTOP_QUERY` in `Sidebar.tsx`) because whether to offer the rail is a render decision, not just a style; it must stay equal to Tailwind's `md:`.
 - Header row: logo (`public/logo.png`, small) + "Slash" wordmark (hidden when collapsed) on the left, collapse-toggle icon button on the right.
 - Primary action: a "새 검색" (new search) button, icon+label, pinned near the top.
 - Nav: icon+label rows (히스토리 / 대시보드 / 즐겨찾기 / 파일 / 일정) — only 히스토리 and 대시보드 route anywhere; the rest are named but inert, same as the settings categories (§4 Settings). Muted by default, foreground on hover, no gradient here (gradient stays reserved for the mark/focus-ring/wash per §2).
@@ -248,6 +248,8 @@ Don't introduce conventional drop-shadows on cards, and don't reintroduce blur-b
 ## 8. Responsive Behavior
 
 No breakpoint or mobile-viewport evidence was supplied with the reference. Treat responsive behavior as unspecified: build mobile-first with the same component shapes (full-pill input, stacked feature columns) rather than asserting a specific breakpoint set as canonical.
+
+The one breakpoint that now exists is the sidebar's (§4 Sidebar): `md` / 768px, dividing "sidebar sits beside the content" from "sidebar covers the content." It was picked as Tailwind's default rather than measured from a reference — if a real mobile design arrives, this is the number to check first.
 
 ## 9. Agent Prompt Guide
 
@@ -331,6 +333,7 @@ Treat this section as a starting default, not verified brand motion.
 **Revised again:** 2026-07-31 (later still) — `/네이버/날씨` became top-level `/날씨` (§9). Naver only repackages an external weather feed, so "which service fetches it" isn't a question worth asking the user; the backend calls a weather API directly and returns the value. This is the per-node rule from the 2026-07-30 action-first note applied in the one direction it actually holds: 지도 and 길찾기 stay under 네이버 because the provider genuinely changes the answer, 날씨 doesn't. Don't read it as a return to an action-first tree.
 **Revised again:** 2026-07-31 (later still) — `/파일`'s folder picking moved out of the search panel into 설정 > 일반 (§4 File search), and the results list became keyboard-driven (↑↓ + Enter opens). Searching had been asking for two decisions at once — which folders, then which file — with the one that almost never changes sitting in front of the one that always does. The hook is now shared through `FileSearchProvider` since the two halves live in different components.
 **Revised again:** 2026-07-31 (later still) — theme and font size moved from `AppShell` to an `AppearanceProvider` around the router, because the login screen isn't inside the shell and was therefore stuck on dark regardless of the OS setting (§4 Settings). Same session: `/파일` results collapse to 10 with a "{n}개 더 보기" chevron, expanding into a scrollable list — `↓` past the last visible row expands rather than dead-ending, since a keyboard user has to be able to reach row 11. `MAX_RESULTS` went 20 → 100 now that the list isn't obliged to show them all at once.
+**Revised again:** 2026-07-31 (later still) — the sidebar became an off-canvas drawer below `md` (§4 Sidebar, §8): hidden by default, opened by one button at the top-left of the content, closed by the scrim / Escape / navigation. Collapsing to the 68px rail stays a desktop-only idea — the rail exists so content can sit beside it, which is exactly what a phone doesn't have. First real breakpoint in the project.
 **Superseded bootstrap material:** this project was first bootstrapped from a claude-style test reference, then pivoted to Slash's own brand on 2026-07-29. Those two files (`DESIGN_DEPRECATED.md`, `DESIGN_DEPRECATED_claude.md`) were deleted on 2026-07-30 — a competing palette sitting in the repo root was more likely to be grepped by mistake than to be useful. They remain in git history at commit `0ea4bd1` if ever needed.
 
 ---
