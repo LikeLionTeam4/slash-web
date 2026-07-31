@@ -305,6 +305,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   }
 
   function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // 미뤄둔 Enter는 그 키를 뗄 때까지만 유효하다. 조합을 확정하는 Enter의 keyup은 IME가 삼켜서
+    // 아예 오지 않을 수 있는데, 그러면 깃발이 계속 남아 있다가 그다음 Enter의 keyup이 그걸 주워
+    // 동작을 한 번 더 실행한다 — keydown에서 한 번, keyup에서 또 한 번. `/모델`에서 서비스로
+    // 들어가자마자 그 서비스의 첫 모델이 선택되고 창이 닫히던 증상이 이것이었다.
+    pendingEnterRef.current = false
+
     if (e.key === 'Enter') {
       // 한글/일본어/중국어는 마지막 음절이 조합 중인 채로 Enter를 맞는다. 그 Enter로 여기서 바로
       // 상태를 바꾸면 조합 중이던 글자가 중복 입력된다(예전 "검색" 버그). 그렇다고 그냥 버리면
