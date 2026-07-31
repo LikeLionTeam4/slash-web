@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { SearchBar } from '../components/SearchBar'
 import { NICKNAME } from '../lib/user'
-import { EXAMPLE_COMMANDS, exampleCommandText } from '../lib/exampleCommands'
+import { EXAMPLE_COMMANDS } from '../lib/exampleCommands'
 
 export function HomePage() {
-  const [preset, setPreset] = useState<{ text: string } | undefined>(undefined)
+  const [preset, setPreset] = useState<{ path: string[]; operands: string[] } | undefined>(undefined)
 
   return (
     <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center text-center">
@@ -20,13 +20,13 @@ export function HomePage() {
           <button
             key={cmd.path.join('/')}
             type="button"
-            onClick={() => setPreset({ text: exampleCommandText(cmd) })}
+            onClick={() => setPreset({ path: cmd.path, operands: cmd.operands })}
             className="flex items-center gap-2 rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm text-foreground/90 transition-colors hover:bg-surface-raised"
           >
             <span>{cmd.icon}</span>
             <span>
               <span className="text-muted">/</span>
-              {cmd.path.join('/')} <span className="text-muted">{cmd.query}</span>
+              {cmd.path.join('/')} <span className="text-muted">{cmd.operands.join(' ')}</span>
             </span>
           </button>
         ))}

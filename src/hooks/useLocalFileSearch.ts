@@ -26,7 +26,9 @@ type GrantedFolder = {
 type ReadOnlyFolder = { name: string; fileCount: number; skippedSystemNames: string[] }
 
 const MAX_INDEXED_FILES = 500
-const MAX_RESULTS = 20
+// 목록은 기본 10개만 보여주고 나머지는 '더 보기'로 펼친다(SearchBar) — 잘라내는 건 화면 쪽 일이라
+// 여기서는 넉넉히 남긴다. 그래도 상한은 둔다: 색인 자체가 500개까지라 그 이상은 의미가 없다.
+const MAX_RESULTS = 100
 const TRASH_DIR_NAME = '.slash-trash'
 const MANIFEST_NAME = '.manifest.json'
 

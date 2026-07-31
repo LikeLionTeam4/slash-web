@@ -1,161 +1,212 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Command } from 'lucide-react'
+import { PanelLeft, Plus, History, LayoutDashboard, Star, FolderClosed, Calendar, Command } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
-import { EXAMPLE_COMMANDS, exampleCommandText } from '../lib/exampleCommands'
+import { clearLogin, homePathForSession } from '../lib/auth'
+import { RECENT_ENTRIES } from '../lib/mockHistory'
 import { EMAIL } from '../lib/user'
 
-type RecentEntry = { text: string; isCommand: boolean }
+/** Tailwind의 `md:`와 같은 값이어야 한다 — 접힘(레일) 모드를 쓸지 말지를 JS와 CSS가 같이 판단한다. */
+const DESKTOP_QUERY = '(min-width: 768px)'
 
-// Mirrors the home screen's example commands (as if the user had just tried each one), plus a
-// couple of free-text queries so both search modes are visible side by side in "최근".
-const RECENTS: RecentEntry[] = [
-  ...EXAMPLE_COMMANDS.map((cmd): RecentEntry => ({ text: exampleCommandText(cmd), isCommand: true })),
-  { text: '요즘 뜨는 넷플릭스 드라마 추천해줘', isCommand: false },
-  { text: '면접 예상 질문 정리해줘', isCommand: false },
-]
+/**
+ * 좁은 화면에서는 접힘 모드가 없다. 68px 레일은 본문 옆에 자리가 남을 때나 쓸모가 있고,
+ * 모바일에서는 사이드바가 본문을 덮는 서랍이라 "열림/닫힘" 두 상태로 충분하다.
+ */
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia(DESKTOP_QUERY).matches)
+
+  useEffect(() => {
+    const media = window.matchMedia(DESKTOP_QUERY)
+    const apply = () => setIsDesktop(media.matches)
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [])
+
+  return isDesktop
+}
 
 const NAV_ITEMS: { icon: typeof History; label: string; path?: string }[] = [
   { icon: History, label: '히스토리', path: '/history' },
   { icon: LayoutDashboard, label: '대시보드', path: '/dashboard' },
   { icon: Star, label: '즐겨찾기' },
   { icon: FolderClosed, label: '파일' },
+  { icon: Calendar, label: '일정' },
 ]
 
 export function Sidebar({
+  mobileOpen,
+  onMobileOpenChange,
   onOpenSettings,
   onOpenGuide,
   onOpenShortcuts,
 }: {
+  mobileOpen: boolean
+  onMobileOpenChange: (open: boolean) => void
   onOpenSettings: () => void
   onOpenGuide: () => void
   onOpenShortcuts: () => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const isDesktop = useIsDesktop()
   const location = useLocation()
   const navigate = useNavigate()
+  // 레일(아이콘만) 모드는 데스크톱에서만 — 모바일 서랍은 열리면 항상 제 너비로 보인다.
+  const rail = isDesktop && collapsed
+
+  // 넓은 화면으로 바뀌면 서랍은 의미가 없다. 열린 채로 두면 다시 좁아졌을 때 느닷없이 펼쳐져 있다.
+  useEffect(() => {
+    if (isDesktop) onMobileOpenChange(false)
+  }, [isDesktop, onMobileOpenChange])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (e: KeyboardEvent) => e.key === 'Escape' && onMobileOpenChange(false)
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [mobileOpen, onMobileOpenChange])
 
   return (
-    <aside
-      className={`flex h-screen shrink-0 flex-col border-r border-hairline bg-surface transition-[width] duration-200 ${
-        collapsed ? 'w-[68px]' : 'w-[260px]'
-      }`}
-    >
-      <div className="flex items-center justify-between px-3 pt-4">
-        {!collapsed && (
-          <div className="flex items-center gap-2 px-1 text-[15px] font-semibold">
-            <img src="/logo.png" alt="" className="h-6 w-6 rounded-[6px]" />
-            Slash
-          </div>
-        )}
-        <Tooltip label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}>
+    <>
+      {/* 서랍이 열렸을 때만 깔리는 막 — 데스크톱에서는 사이드바가 본문을 덮지 않으므로 없다. */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => onMobileOpenChange(false)} />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-[260px] shrink-0 flex-col border-r border-hairline bg-surface transition-transform duration-200 md:static md:translate-x-0 md:transition-[width] ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${rail ? 'md:w-[68px]' : 'md:w-[260px]'}`}
+      >
+        <div className="flex items-center justify-between px-3 pt-4">
+          {!rail && (
+            <button
+              type="button"
+              onClick={() => navigate(homePathForSession())}
+              className="-mx-1 flex items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface-raised"
+            >
+              <img src="/logo.png" alt="" className="h-6 w-6 rounded-[6px]" />
+              Slash
+            </button>
+          )}
+          <Tooltip label={!isDesktop ? '사이드바 닫기' : rail ? '사이드바 펼치기' : '사이드바 접기'}>
+            <button
+              aria-label={isDesktop ? '사이드바 접기/펼치기' : '사이드바 닫기'}
+              onClick={() => (isDesktop ? setCollapsed((c) => !c) : onMobileOpenChange(false))}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground ${
+                rail ? 'mx-auto' : ''
+              }`}
+            >
+              <PanelLeft size={18} />
+            </button>
+          </Tooltip>
+        </div>
+
+        <div className="px-3 pt-4">
           <button
-            aria-label="사이드바 접기/펼치기"
-            onClick={() => setCollapsed((c) => !c)}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground ${
-              collapsed ? 'mx-auto' : ''
+            type="button"
+            onClick={() => navigate('/new')}
+            className={`flex w-full items-center gap-2 rounded-lg bg-foreground/8 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground/12 ${
+              rail ? 'justify-center' : ''
             }`}
           >
-            <PanelLeft size={18} />
+            <Plus size={16} />
+            {!rail && '새 채팅'}
           </button>
-        </Tooltip>
-      </div>
-
-      <div className="px-3 pt-4">
-        <button
-          type="button"
-          className={`flex w-full items-center gap-2 rounded-lg bg-foreground/8 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground/12 ${
-            collapsed ? 'justify-center' : ''
-          }`}
-        >
-          <Plus size={16} />
-          {!collapsed && '새 검색'}
-        </button>
-      </div>
-
-      <nav className="flex flex-col gap-0.5 px-3 pt-3">
-        {NAV_ITEMS.map(({ icon: Icon, label, path }) => {
-          const active = path !== undefined && location.pathname === path
-          return (
-            <button
-              key={label}
-              type="button"
-              onClick={path ? () => navigate(path) : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                active ? 'bg-foreground/8 text-foreground' : 'text-muted hover:bg-surface-raised hover:text-foreground'
-              } ${collapsed ? 'justify-center' : ''}`}
-            >
-              <Icon size={17} />
-              {!collapsed && label}
-            </button>
-          )
-        })}
-        <button
-          type="button"
-          onClick={onOpenGuide}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-raised hover:text-foreground ${
-            collapsed ? 'justify-center' : ''
-          }`}
-        >
-          <Command size={17} />
-          {!collapsed && '명령어 가이드'}
-        </button>
-      </nav>
-
-      {collapsed ? (
-        <div className="flex-1" />
-      ) : (
-        <div className="mt-4 flex-1 overflow-y-auto px-3">
-          <p className="px-3 pb-1 text-xs font-medium text-muted">최근</p>
-          <div className="flex flex-col gap-0.5">
-            {RECENTS.map((item) => (
-              <button
-                key={item.text}
-                type="button"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
-              >
-                {item.isCommand && (
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-[10px] font-semibold text-white">
-                    /
-                  </span>
-                )}
-                <span className="truncate">{item.text}</span>
-              </button>
-            ))}
-          </div>
         </div>
-      )}
 
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setProfileMenuOpen((o) => !o)}
-          className={`flex w-full items-center gap-2.5 border-t border-hairline px-3 py-3 text-left transition-colors hover:bg-surface-raised ${
-            collapsed ? 'justify-center' : ''
-          }`}
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-sm font-medium text-foreground">
-            S
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">Slash 사용자</p>
-              <p className="text-xs text-muted">무료 플랜</p>
+        <nav className="flex flex-col gap-0.5 px-3 pt-3">
+          {NAV_ITEMS.map(({ icon: Icon, label, path }) => {
+            const active = path !== undefined && location.pathname === path
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={path ? () => navigate(path) : undefined}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? 'bg-foreground/8 text-foreground'
+                    : 'text-muted hover:bg-surface-raised hover:text-foreground'
+                } ${rail ? 'justify-center' : ''}`}
+              >
+                <Icon size={17} />
+                {!rail && label}
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            onClick={onOpenGuide}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-raised hover:text-foreground ${
+              rail ? 'justify-center' : ''
+            }`}
+          >
+            <Command size={17} />
+            {!rail && '명령어 가이드'}
+          </button>
+        </nav>
+
+        {rail ? (
+          <div className="flex-1" />
+        ) : (
+          <div className="mt-4 flex-1 overflow-y-auto px-3">
+            <p className="px-3 pb-1 text-xs font-medium text-muted">최근</p>
+            <div className="flex flex-col gap-0.5">
+              {RECENT_ENTRIES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigate(`/chat/${item.id}`)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
+                >
+                  {item.isCommand && (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
+                      /
+                    </span>
+                  )}
+                  <span className="truncate">{item.text}</span>
+                </button>
+              ))}
             </div>
-          )}
-        </button>
-
-        {profileMenuOpen && (
-          <ProfileMenu
-            email={EMAIL}
-            onOpenSettings={onOpenSettings}
-            onOpenShortcuts={onOpenShortcuts}
-            onClose={() => setProfileMenuOpen(false)}
-          />
+          </div>
         )}
-      </div>
-    </aside>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setProfileMenuOpen((o) => !o)}
+            className={`flex w-full items-center gap-2.5 border-t border-hairline px-3 py-3 text-left transition-colors hover:bg-surface-raised ${
+              rail ? 'justify-center' : ''
+            }`}
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-sm font-medium text-foreground">
+              S
+            </div>
+            {!rail && (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">Slash 사용자</p>
+                <p className="text-xs text-muted">무료 플랜</p>
+              </div>
+            )}
+          </button>
+
+          {profileMenuOpen && (
+            <ProfileMenu
+              email={EMAIL}
+              onOpenSettings={onOpenSettings}
+              onOpenShortcuts={onOpenShortcuts}
+              // 뒤로 가기로 로그인 전 화면에 되돌아가지 않도록 히스토리를 남기지 않는다.
+              // TODO: 백엔드 연동 시 여기서 세션/토큰 정리도 함께 한다.
+              onLogout={() => {
+                clearLogin()
+                navigate('/login', { replace: true })
+              }}
+              onClose={() => setProfileMenuOpen(false)}
+            />
+          )}
+        </div>
+      </aside>
+    </>
   )
 }

@@ -1,7 +1,10 @@
 import { Search, ChevronDown } from 'lucide-react'
+import { useNavigate } from 'react-router'
 import { HISTORY_ENTRIES } from '../../lib/mockHistory'
 
 export function HistoryPage() {
+  const navigate = useNavigate()
+
   return (
     <div className="w-full max-w-4xl">
       <div className="flex items-center justify-between">
@@ -31,15 +34,16 @@ export function HistoryPage() {
       </div>
 
       <div className="mt-6 flex flex-col">
-        {HISTORY_ENTRIES.map((entry, i) => (
+        {HISTORY_ENTRIES.map((entry) => (
           <button
-            key={`${entry.text}-${i}`}
+            key={entry.id}
             type="button"
+            onClick={() => navigate(`/chat/${entry.id}`)}
             className="flex items-center justify-between gap-4 border-b border-hairline px-2 py-3.5 text-left transition-colors hover:bg-surface-raised"
           >
             <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
               {entry.isCommand && (
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-[10px] font-semibold text-white">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
                   /
                 </span>
               )}
