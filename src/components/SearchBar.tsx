@@ -15,6 +15,7 @@ import { parseCommandChain, mockPlaceholderMessage } from '../lib/mockCommands'
 import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
 import { useFileSearch } from '../hooks/fileSearchContext'
+import { useAgentStatus } from '../hooks/agentStatusContext'
 
 function AddMenuItem({
   icon: Icon,
@@ -100,6 +101,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const textInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const fileSearch = useFileSearch()
+  const agentStatus = useAgentStatus()
   const navigate = useNavigate()
   const location = useLocation()
   // IME composition tracking (한글/일본어/중국어 등) — Enter that confirms a composing syllable
@@ -982,12 +984,26 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
           자리이므로, 모델 이름을 고정 문구("로컬 LLM") 대신 여기에 그대로 적는다. 조사는 사용자가
           친 문장과 모델 이름 둘 다 뒤에 붙으므로 '이(가)'와 같은 병기 형태로 둔다 — 모델 이름이
-          'o3', 'Gemini 3 Flash'처럼 받침 여부가 제각각이라 하나로 정할 수 없다. */}
-      {isFreeText && (
-        <p className="pl-4 text-left text-xs text-muted">
-          '{trimmed}'이(가) {modelDestination}에 요청됩니다.
-        </p>
-      )}
+          'o3', 'Gemini 3 Flash'처럼 받침 여부가 제각각이라 하나로 정할 수 없다.
+          자유 입력은 로컬 에이전트를 거쳐 백엔드로 가므로, 에이전트가 꺼져있으면 보낼 곳 자체가
+          없다는 걸 여기서 바로 알려준다 (§ Settings > 연동 > 지정 PC 관리). */}
+      {isFreeText &&
+        (agentStatus === 'offline' ? (
+          <p className="pl-4 text-left text-xs text-accent-blue">
+            로컬 에이전트가 꺼져있어서 요청을 보낼 수 없어요 ·{' '}
+            <button
+              type="button"
+              onClick={() => navigate({ pathname: location.pathname, hash: '#settings/plugins' })}
+              className="underline underline-offset-2 hover:brightness-110"
+            >
+              PC 관리에서 확인하기
+            </button>
+          </p>
+        ) : (
+          <p className="pl-4 text-left text-xs text-muted">
+            '{trimmed}'이(가) {modelDestination}에 요청됩니다.
+          </p>
+        ))}
         </div>
       )}
     </div>

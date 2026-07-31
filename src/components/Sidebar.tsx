@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command } from 'lucide-react'
+import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command, Download } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
 import { clearLogin, homePathForSession } from '../lib/auth'
 import { RECENT_ENTRIES } from '../lib/mockHistory'
 import { EMAIL } from '../lib/user'
+import { useAgentStatus } from '../hooks/agentStatusContext'
+import type { SettingsCategoryId } from './SettingsDialog'
 
 /** Tailwind의 `md:`와 같은 값이어야 한다 — 접힘(레일) 모드를 쓸지 말지를 JS와 CSS가 같이 판단한다. */
 const DESKTOP_QUERY = '(min-width: 768px)'
@@ -43,13 +45,14 @@ export function Sidebar({
 }: {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
-  onOpenSettings: () => void
+  onOpenSettings: (category?: SettingsCategoryId) => void
   onOpenGuide: () => void
   onOpenShortcuts: () => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const isDesktop = useIsDesktop()
+  const agentStatus = useAgentStatus()
   const location = useLocation()
   const navigate = useNavigate()
   // 레일(아이콘만) 모드는 데스크톱에서만 — 모바일 서랍은 열리면 항상 제 너비로 보인다.
@@ -171,11 +174,11 @@ export function Sidebar({
           </div>
         )}
 
-        <div className="relative">
+        <div className="relative flex items-center gap-1 border-t border-hairline px-2 py-2">
           <button
             type="button"
             onClick={() => setProfileMenuOpen((o) => !o)}
-            className={`flex w-full items-center gap-2.5 border-t border-hairline px-3 py-3 text-left transition-colors hover:bg-surface-raised ${
+            className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-surface-raised ${
               rail ? 'justify-center' : ''
             }`}
           >
@@ -189,6 +192,21 @@ export function Sidebar({
               </div>
             )}
           </button>
+
+          {/* 로컬 에이전트가 꺼져있을 때만 보인다 — 켜져있으면 할 일이 없으니 아이콘 자체가 사라진다
+              (모양이 아니라 색으로 "알림"을 표현하면 accent-blue/green을 원래 역할 밖에 쓰게 된다). */}
+          {!rail && agentStatus === 'offline' && (
+            <Tooltip label="로컬 에이전트가 꺼져있어요 — 다운로드 및 PC 등록하기">
+              <button
+                type="button"
+                aria-label="로컬 에이전트 다운로드"
+                onClick={() => onOpenSettings('plugins')}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground"
+              >
+                <Download size={16} />
+              </button>
+            </Tooltip>
+          )}
 
           {profileMenuOpen && (
             <ProfileMenu
