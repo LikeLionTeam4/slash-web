@@ -4,8 +4,7 @@ import { Sidebar } from './Sidebar'
 import { SettingsDialog, DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
-import { useTheme } from '../hooks/useTheme'
-import { useFontSize } from '../hooks/useFontSize'
+import { useAppearance } from '../hooks/appearanceContext'
 import { FileSearchProvider } from '../hooks/fileSearchContext'
 
 const SETTINGS_HASH_PREFIX = '#settings/'
@@ -13,8 +12,7 @@ const GUIDE_HASH = '#guide'
 const SHORTCUTS_HASH = '#shortcuts'
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { theme, setTheme } = useTheme()
-  const { fontSize, setFontSize } = useFontSize()
+  const { theme, setTheme, fontSize, setFontSize } = useAppearance()
   const location = useLocation()
   const navigate = useNavigate()
 
