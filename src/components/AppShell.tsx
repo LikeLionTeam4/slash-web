@@ -6,6 +6,7 @@ import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { useTheme } from '../hooks/useTheme'
 import { useFontSize } from '../hooks/useFontSize'
+import { FileSearchProvider } from '../hooks/fileSearchContext'
 
 const SETTINGS_HASH_PREFIX = '#settings/'
 const GUIDE_HASH = '#guide'
@@ -41,22 +42,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   const closeShortcuts = () => navigate({ pathname: location.pathname }, { replace: true })
 
   return (
-    <div className="flex h-screen font-sans text-foreground">
-      <Sidebar onOpenSettings={openSettings} onOpenGuide={openGuide} onOpenShortcuts={openShortcuts} />
-      <main className="flex flex-1 flex-col items-center overflow-y-auto px-6 py-8">{children}</main>
-      {settingsOpen && (
-        <SettingsDialog
-          theme={theme}
-          onThemeChange={setTheme}
-          fontSize={fontSize}
-          onFontSizeChange={setFontSize}
-          active={settingsCategory}
-          onActiveChange={changeSettingsCategory}
-          onClose={closeSettings}
-        />
-      )}
-      {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
-      {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
-    </div>
+    <FileSearchProvider>
+      <div className="flex h-screen font-sans text-foreground">
+        <Sidebar onOpenSettings={openSettings} onOpenGuide={openGuide} onOpenShortcuts={openShortcuts} />
+        <main className="flex flex-1 flex-col items-center overflow-y-auto px-6 py-8">{children}</main>
+        {settingsOpen && (
+          <SettingsDialog
+            theme={theme}
+            onThemeChange={setTheme}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
+            active={settingsCategory}
+            onActiveChange={changeSettingsCategory}
+            onClose={closeSettings}
+          />
+        )}
+        {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
+        {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
+      </div>
+    </FileSearchProvider>
   )
 }

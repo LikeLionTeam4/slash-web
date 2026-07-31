@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Trash2 } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { MicSettingsPopover } from './MicSettingsPopover'
@@ -13,7 +14,7 @@ import {
 import { parseCommandChain, mockPlaceholderMessage } from '../lib/mockCommands'
 import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
-import { useLocalFileSearch } from '../hooks/useLocalFileSearch'
+import { useFileSearch } from '../hooks/fileSearchContext'
 
 function AddMenuItem({
   icon: Icon,
@@ -80,6 +81,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const [selectedMicId, setSelectedMicId] = useState<string | null>(null)
   const [holdToRecord, setHoldToRecord] = useState(true)
   const [highlightIndex, setHighlightIndex] = useState(0)
+  const [fileHighlight, setFileHighlight] = useState(0)
   const [modelView, setModelView] = useState<ModelView>('services')
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
@@ -90,10 +92,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // 들고 있다가 백엔드에도 따로 보낸다.
   const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const readOnlyFolderInputRef = useRef<HTMLInputElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const fileSearch = useLocalFileSearch()
+  const fileSearch = useFileSearch()
+  const navigate = useNavigate()
+  const location = useLocation()
   // IME composition tracking (한글/일본어/중국어 등) — Enter that confirms a composing syllable
   // must NOT also trigger our own Enter handling, or the last character doubles.
   const isComposingRef = useRef(false)
@@ -144,6 +147,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           ? `${withObjectParticle(nextOperandName!)} 입력하고 Enter를 눌러주세요.`
           : null
   const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
+  const hasSearchFolders = fileSearch.folders.length > 0 || fileSearch.readOnlyFolders.length > 0
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
     MODELS_BY_SERVICE[selectedModel.service].find((m) => m.id === selectedModel.modelId)?.label ?? ''
@@ -155,10 +159,16 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const showModelPicker = commandMode === null && trimmed === '/모델'
   const showTrash = commandMode === null && trimmed === '/파일/휴지통'
   const showSuggestions = !!suggestions && !showModelPicker && !showTrash
-  const showFileSearch = !showSuggestions && !showModelPicker && !showTrash && isFileSearchCommand
+  // 폴더가 하나도 없으면 파일 이름을 다 친 뒤가 아니라 `/파일`에 들어서는 순간 알려준다 —
+  // 검색어를 다 입력하고 나서야 "검색할 데가 없다"고 하는 건 너무 늦다.
+  const needsFolderSetup =
+    fileSearch.supported && !hasSearchFolders && commandMode?.path.length === 1 && commandMode.path[0] === '파일'
+  const showFileSearch =
+    !showSuggestions && !showModelPicker && !showTrash && (isFileSearchCommand || needsFolderSetup)
   const showModelSearch =
     !showSuggestions && !showModelPicker && !showTrash && !showFileSearch && isModelSearchCommand
-  const showCommandModeHint = !!commandModeHint
+  // 폴더 안내 패널이 떠 있으면 "파일 이름을 입력하고 Enter" 줄은 겹쳐서 시끄럽기만 하다.
+  const showCommandModeHint = !!commandModeHint && !showFileSearch
   const showPlaceholderMsg =
     !showSuggestions &&
     !showModelPicker &&
@@ -189,6 +199,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
   useEffect(() => {
     setHighlightIndex(0)
+    setFileHighlight(0)
   }, [value])
 
   // Suggestion chips on the home screen set a query in from the outside — the caller passes a new
@@ -262,6 +273,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     if (showModelPicker) setValue('')
   }
 
+  /** 검색할 폴더는 설정에서 정한다 — 설정 모달은 URL 해시로 열린다(AppShell). */
+  function openFolderSettings() {
+    navigate({ pathname: location.pathname, hash: '#settings/general' })
+  }
+
   // 딥링크 명령(/네이버/지도, /네이버/길찾기)은 결과가 앱 밖 새 탭에서 열린다 — 이슈 #6의 방식 1.
   // window.open은 클릭/Enter 같은 사용자 제스처 안에서 호출해야 팝업 차단을 피할 수 있다.
   function openDeepLink(url: string) {
@@ -293,6 +309,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       } else {
         selectModel(MODELS_BY_SERVICE[modelView][modelHighlight].id)
       }
+      return
+    }
+    // 파일 검색은 결과가 곧 결론이다 — Enter는 명령을 보내는 게 아니라 고른 파일을 연다.
+    if (showFileSearch && fileResults.length > 0) {
+      const file = fileResults[fileHighlight] ?? fileResults[0]
+      fileSearch.openFile(file.folderName, file.path)
       return
     }
     if (commandMode || deepLink) {
@@ -360,6 +382,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           setValue('')
         }
       }
+      return
+    }
+
+    // 파일 결과 위아래로 옮기기. 명령어 모드 안에서 도는 목록이라 아래 commandMode 처리보다 먼저 본다.
+    if (showFileSearch && fileResults.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault()
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      setFileHighlight((i) => (i + step + fileResults.length) % fileResults.length)
       return
     }
 
@@ -489,22 +519,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         className="hidden"
         onChange={(e) => {
           handleFilesSelected(e.target.files)
-          e.target.value = ''
-        }}
-      />
-      {/* webkitdirectory isn't a typed JSX prop — set it imperatively via the ref instead. Unlike
-          showDirectoryPicker, this older API has no "sensitive directory" blocklist, so it's the
-          only way to reach a top-level folder like Downloads itself (read-only trade-off). */}
-      <input
-        ref={(el) => {
-          readOnlyFolderInputRef.current = el
-          el?.setAttribute('webkitdirectory', '')
-        }}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files) fileSearch.addReadOnlyFolder(e.target.files)
           e.target.value = ''
         }}
       />
@@ -785,159 +799,74 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             <p className="px-4 py-3 text-sm text-muted">
               이 브라우저는 로컬 폴더 접근을 지원하지 않아요 (Chrome/Edge 권장).
             </p>
-          ) : fileSearch.folders.length === 0 && fileSearch.readOnlyFolders.length === 0 ? (
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted">검색할 폴더를 먼저 선택해주세요. 여러 폴더를 추가하면 한 번에 검색할 수 있어요.</p>
-                <button
-                  type="button"
-                  onClick={fileSearch.addFolder}
-                  className="shrink-0 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
-                >
-                  폴더 선택
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-muted">
-                홈 폴더·바탕화면·다운로드 같은 최상위 폴더는 브라우저가 막아요 — 그 안의 구체적인 하위 폴더들을 여러 개 추가해보세요.
-              </p>
+          ) : !hasSearchFolders ? (
+            // 폴더를 여기서 고르게 하면 검색 한 번에 "어디서"와 "무엇을"을 같이 정해야 한다.
+            // 잘 바뀌지 않는 쪽은 설정에 두고, 여기서는 그리로 보내기만 한다.
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <p className="text-sm text-muted">검색할 폴더가 아직 없어요. 설정에서 한 번만 정해두면 돼요.</p>
               <button
                 type="button"
-                onClick={() => readOnlyFolderInputRef.current?.click()}
-                className="mt-2 text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
+                onClick={openFolderSettings}
+                className="shrink-0 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
               >
-                다운로드처럼 최상위 폴더 자체를 검색하고 싶다면 (읽기 전용) →
+                폴더 설정 열기
               </button>
-              {fileSearch.error && <p className="mt-1 text-xs text-accent-blue">{fileSearch.error}</p>}
             </div>
+          ) : fileSearch.indexing ? (
+            <p className="px-4 py-3 text-sm text-muted">폴더 색인 중...</p>
+          ) : fileResults.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted">일치하는 파일이 없어요.</p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-2">
-                {fileSearch.folders.map((f) =>
-                  f.connected ? (
-                    <span
-                      key={f.name}
-                      className="flex items-center gap-1.5 rounded-full bg-foreground/8 py-1 pl-2.5 pr-1.5 text-xs text-foreground"
-                    >
-                      {f.name}
-                      <button
-                        type="button"
-                        aria-label={`${f.name} 검색 대상에서 제거`}
-                        title="검색 대상에서 제거"
-                        onClick={() => fileSearch.removeFolder(f.name)}
-                        className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted transition-colors hover:text-accent-blue"
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ) : (
-                    <span
-                      key={f.name}
-                      className="flex items-center gap-1.5 rounded-full border border-dashed border-hairline py-1 pl-2.5 pr-1.5 text-xs text-muted"
-                    >
-                      {f.name}
-                      <button
-                        type="button"
-                        onClick={() => fileSearch.reconnectFolder(f.name)}
-                        className="font-medium text-accent-blue transition-colors hover:brightness-110"
-                      >
-                        재연결
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`${f.name} 검색 대상에서 제거`}
-                        title="검색 대상에서 제거"
-                        onClick={() => fileSearch.removeFolder(f.name)}
-                        className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted transition-colors hover:text-accent-blue"
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ),
-                )}
-                {fileSearch.readOnlyFolders.map((f) => (
-                  <span
-                    key={f.name}
-                    title="읽기 전용 — 삭제 불가, 새로고침하면 다시 추가해야 해요"
-                    className="flex items-center gap-1.5 rounded-full bg-foreground/8 py-1 pl-2.5 pr-1.5 text-xs text-muted"
-                  >
-                    {f.name} (읽기 전용)
-                    <button
-                      type="button"
-                      aria-label={`${f.name} 검색 대상에서 제거`}
-                      title="검색 대상에서 제거"
-                      onClick={() => fileSearch.removeReadOnlyFolder(f.name)}
-                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted transition-colors hover:text-accent-blue"
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
-                <button
-                  type="button"
-                  onClick={fileSearch.addFolder}
-                  className="shrink-0 text-xs font-medium text-foreground transition-colors hover:text-accent-blue"
-                >
-                  + 폴더 추가
-                </button>
-                <button
-                  type="button"
-                  onClick={() => readOnlyFolderInputRef.current?.click()}
-                  title="다운로드처럼 최상위 폴더 자체는 읽기 전용으로만 추가할 수 있어요"
-                  className="shrink-0 text-xs font-medium text-muted transition-colors hover:text-accent-blue"
-                >
-                  + 최상위 폴더 (읽기 전용)
-                </button>
-              </div>
-
               {fileSearch.systemFilesSkipped.length > 0 && (
                 <p className="border-b border-hairline px-4 py-1.5 text-xs text-muted">
                   시스템 파일은 검색에서 제외했어요: {fileSearch.systemFilesSkipped.join(', ')}
                 </p>
               )}
-
-              {fileSearch.indexing ? (
-                <p className="px-4 py-3 text-sm text-muted">폴더 색인 중...</p>
-              ) : (
-                <>
-                  {fileResults.length === 0 ? (
-                    <p className="px-4 py-3 text-sm text-muted">일치하는 파일이 없어요.</p>
-                  ) : (
-                    fileResults.map((f) => (
-                      <div key={`${f.folderName}/${f.path}`} className="flex items-center gap-2.5 px-4 py-2 text-sm">
-                        <FileText size={16} className="shrink-0 text-muted" />
-                        <button
-                          type="button"
-                          onClick={() => fileSearch.openFile(f.folderName, f.path)}
-                          title="파일 열기"
-                          className="min-w-0 flex-1 truncate text-left text-foreground transition-colors hover:text-accent-blue hover:underline"
-                        >
-                          {f.name}
-                        </button>
-                        <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
-                          {f.folderName}/{f.path}
-                        </span>
-                        {!f.readOnly && (
-                          <button
-                            type="button"
-                            aria-label={`${f.name} 휴지통으로 이동`}
-                            title="휴지통으로 이동"
-                            onClick={() => {
-                              if (window.confirm(`'${f.name}'을(를) 휴지통으로 옮길까요? '/파일/휴지통'에서 다시 복원할 수 있어요.`)) {
-                                fileSearch.deleteFile(f.folderName, f.path)
-                              }
-                            }}
-                            className="shrink-0 text-muted transition-colors hover:text-accent-blue"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
-                    ))
+              {fileResults.map((f, i) => (
+                <div
+                  key={`${f.folderName}/${f.path}`}
+                  // 마우스를 올리면 키보드 하이라이트도 같이 옮긴다 — 두 방식이 서로 다른 항목을
+                  // 가리키면 Enter가 어디로 갈지 알 수 없다 (자동완성·모델 피커와 같은 규칙).
+                  onMouseEnter={() => setFileHighlight(i)}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                    i === fileHighlight ? 'bg-foreground/8' : ''
+                  }`}
+                >
+                  <FileText size={16} className="shrink-0 text-muted" />
+                  <button
+                    type="button"
+                    onClick={() => fileSearch.openFile(f.folderName, f.path)}
+                    title="파일 열기"
+                    className="min-w-0 flex-1 truncate text-left text-foreground transition-colors hover:text-accent-blue"
+                  >
+                    {f.name}
+                  </button>
+                  <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
+                    {f.folderName}/{f.path}
+                  </span>
+                  {!f.readOnly && (
+                    <button
+                      type="button"
+                      aria-label={`${f.name} 휴지통으로 이동`}
+                      title="휴지통으로 이동"
+                      onClick={() => {
+                        if (window.confirm(`'${f.name}'을(를) 휴지통으로 옮길까요? '/파일/휴지통'에서 다시 복원할 수 있어요.`)) {
+                          fileSearch.deleteFile(f.folderName, f.path)
+                        }
+                      }}
+                      className="shrink-0 text-muted transition-colors hover:text-accent-blue"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   )}
-                  {fileSearch.error && <p className="px-4 py-2 text-xs text-accent-blue">{fileSearch.error}</p>}
-                </>
-              )}
+                </div>
+              ))}
+              <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">↑ ↓ 로 고르고 Enter로 열어요</p>
             </>
+          )}
+          {fileSearch.error && (
+            <p className="border-t border-hairline px-4 py-2 text-xs text-accent-blue">{fileSearch.error}</p>
           )}
         </div>
       )}
