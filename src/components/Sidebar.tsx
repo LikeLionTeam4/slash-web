@@ -7,7 +7,7 @@ import { clearLogin, homePathForSession } from '../lib/auth'
 import { RECENT_ENTRIES } from '../lib/mockHistory'
 import { EMAIL } from '../lib/user'
 import { useAgentStatus } from '../hooks/agentStatusContext'
-import type { SettingsCategoryId } from './SettingsDialog'
+import type { SettingsCategoryId } from '../lib/settingsCategory'
 
 /** Tailwind의 `md:`와 같은 값이어야 한다 — 접힘(레일) 모드를 쓸지 말지를 JS와 CSS가 같이 판단한다. */
 const DESKTOP_QUERY = '(min-width: 768px)'

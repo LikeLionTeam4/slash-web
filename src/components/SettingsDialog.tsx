@@ -1,12 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   X,
-  User,
-  Shield,
-  CreditCard,
-  BarChart2,
-  Puzzle,
-  Cog,
   Monitor,
   Sun,
   Moon,
@@ -22,24 +16,8 @@ import type { FontSize } from '../hooks/useFontSize'
 import { useFileSearch } from '../hooks/fileSearchContext'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { getClientInfo } from '../lib/clientInfo'
+import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
 import { Tooltip } from './Tooltip'
-
-const CATEGORIES = [
-  { id: 'general', label: '일반', icon: Cog },
-  { id: 'files', label: '파일', icon: FolderClosed },
-  { id: 'account', label: '계정', icon: User },
-  { id: 'privacy', label: '개인정보 보호', icon: Shield },
-  { id: 'billing', label: '결제', icon: CreditCard },
-  { id: 'usage', label: '사용량', icon: BarChart2 },
-  { id: 'plugins', label: '연동', icon: Puzzle },
-] as const
-
-export type SettingsCategoryId = (typeof CATEGORIES)[number]['id']
-export const DEFAULT_SETTINGS_CATEGORY: SettingsCategoryId = 'general'
-
-export function isSettingsCategoryId(value: string): value is SettingsCategoryId {
-  return CATEGORIES.some((c) => c.id === value)
-}
 
 const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] = [
   { id: 'system', icon: Monitor, label: '시스템' },
