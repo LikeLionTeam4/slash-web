@@ -91,14 +91,17 @@ interface RegisteredDevice {
   name: string
   registeredAt: string
   isThisDevice?: boolean
+  // 이 PC가 아닌 기기는 실제로 상태를 확인할 방법이 없다(다른 물리적 기기의 localhost는 이
+  // 브라우저에서 애초에 닿지 않는다) — 백엔드가 각 에이전트의 연결 여부를 알려주는 경로가 생기기
+  // 전까지는 데모용 목업 값으로만 보여준다. undefined면 "상태 모름"으로 표시된다.
+  mockAgentOnline?: boolean
 }
 
 // slash-agent가 아직 없어서 실제로 페어링된 적 없는 목업 데이터. "이 PC"로 표시된 한 대만
-// useAgentStatus()의 실시간 값을 반영한다 — 다른 등록 PC의 상태는 이 브라우저가 알 방법이 없다
-// (다른 물리적 기기의 localhost는 애초에 닿지 않는다).
+// useAgentStatus()의 실시간 값을 반영한다.
 const INITIAL_DEVICES: RegisteredDevice[] = [
   { id: 'device-1', name: '메인컴', registeredAt: '2023.12.27', isThisDevice: true },
-  { id: 'device-2', name: '서브', registeredAt: '2025.08.29' },
+  { id: 'device-2', name: '서브', registeredAt: '2025.08.29', mockAgentOnline: true },
 ]
 
 function todayLabel(): string {
@@ -155,20 +158,24 @@ function PcManagement() {
         </p>
 
         <div className="flex flex-col gap-1.5">
-          {devices.map((d) => (
+          {devices.map((d) => {
+            const isOnline = d.isThisDevice ? agentStatus === 'online' : d.mockAgentOnline === true
+            const statusKnown = d.isThisDevice || d.mockAgentOnline !== undefined
+
+            return (
             <div key={d.id} className="flex items-center gap-2.5 rounded-lg border border-hairline px-3 py-2">
               <Tooltip
                 label={
-                  d.isThisDevice
-                    ? agentStatus === 'online'
+                  !statusKnown
+                    ? '다른 기기 — 이 브라우저에서는 상태를 알 수 없어요'
+                    : isOnline
                       ? '로컬 에이전트 정상 동작 중'
                       : '로컬 에이전트가 꺼져있어요'
-                    : '다른 기기 — 이 브라우저에서는 상태를 알 수 없어요'
                 }
               >
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${
-                    d.isThisDevice ? (agentStatus === 'online' ? 'bg-accent-green' : 'bg-muted') : 'bg-muted/30'
+                    !statusKnown ? 'bg-muted/30' : isOnline ? 'bg-accent-green' : 'bg-muted'
                   }`}
                 />
               </Tooltip>
@@ -208,7 +215,7 @@ function PcManagement() {
                 )}
                 <p className="text-2xs text-muted">
                   {d.registeredAt}
-                  {d.isThisDevice && ` · 에이전트 ${agentStatus === 'online' ? '정상 동작 중' : '꺼져있음'}`}
+                  {statusKnown && ` · 에이전트 ${isOnline ? '정상 동작 중' : '꺼져있음'}`}
                 </p>
               </div>
 
@@ -221,7 +228,8 @@ function PcManagement() {
                 <X size={14} />
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -240,7 +248,7 @@ function PcManagement() {
       <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-muted">
         <li>PC는 최대 {MAX_DEVICES}대까지 등록할 수 있어요.</li>
         <li>등록되지 않은 PC에서는 접속이 제한돼요.</li>
-        <li>이 브라우저가 설치된 PC(이 PC)만 로컬 에이전트 상태를 실시간으로 확인할 수 있어요 — 다른 PC의 상태는 여기서 보이지 않아요.</li>
+        <li>이 브라우저가 설치된 PC(이 PC)만 로컬 에이전트 상태를 실시간으로 확인할 수 있어요 — 다른 PC의 상태는 참고용으로만 보여드려요.</li>
       </ul>
     </>
   )
