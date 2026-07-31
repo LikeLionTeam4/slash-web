@@ -116,3 +116,18 @@ source_context: "/private/tmp/claude-501/-Users-ryujun-yeong-projects-likelion-s
 ```
 
 Introduced off-palette color(s) #333333 in /private/tmp/claude-501/-Users-ryujun-yeong-projects-likelion-slash-slash-frontend/88d91d03-33e4-463d-99be-d62c54a792d7/scratchpad/naver-embed-test.html — not in DESIGN.md
+
+## 2026-07-31T08:08:38.998Z — introduced-off-palette-color-s-f8f9fa-fa
+
+```omd-meta
+id: pref_ms8nuxcm_c884fc77
+timestamp: 2026-07-31T08:08:38.998Z
+scope: color
+signal: ambient
+confidence: inferred
+status: pending
+source_agent: claude-code
+source_context: "/Users/ryujun-yeong/projects/SLIPPECAT.github.io/assets/style.css"
+```
+
+Introduced off-palette color(s) #f8f9fa, #fafbfc, #212529 in /Users/ryujun-yeong/projects/SLIPPECAT.github.io/assets/style.css — not in DESIGN.md
