@@ -147,6 +147,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
     MODELS_BY_SERVICE[selectedModel.service].find((m) => m.id === selectedModel.modelId)?.label ?? ''
+  // 모델 이름이 이미 서비스 이름으로 시작하면 "Gemini · Gemini 3 Flash"처럼 겹쳐 읽힌다.
+  const modelDestination = currentModelLabel.startsWith(currentServiceLabel)
+    ? currentModelLabel
+    : `${currentServiceLabel} · ${currentModelLabel}`
 
   const showModelPicker = commandMode === null && trimmed === '/모델'
   const showTrash = commandMode === null && trimmed === '/파일/휴지통'
@@ -744,9 +748,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-foreground">
                 <ServiceIcon icon={SERVICES.find((s) => s.id === selectedModel.service)?.icon ?? null} />
-                <span>
-                  {currentServiceLabel} · {currentModelLabel}로 물어볼게요
-                </span>
+                <span>{modelDestination}로 물어볼게요</span>
               </div>
               <button
                 type="button"
@@ -1002,8 +1004,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           명령어 모드 — Slash 명령으로 웹 검색을 직접 제어해요.
         </p>
       )}
+      {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
+          자리이므로, 모델 이름을 고정 문구("로컬 LLM") 대신 여기에 그대로 적는다. 조사는 사용자가
+          친 문장과 모델 이름 둘 다 뒤에 붙으므로 '이(가)'와 같은 병기 형태로 둔다 — 모델 이름이
+          'o3', 'Gemini 3 Flash'처럼 받침 여부가 제각각이라 하나로 정할 수 없다. */}
       {isFreeText && (
-        <p className="pl-4 text-left text-xs text-muted">'{trimmed}'이(가) 로컬 LLM으로 요청됩니다.</p>
+        <p className="pl-4 text-left text-xs text-muted">
+          '{trimmed}'이(가) {modelDestination}에 요청됩니다.
+        </p>
       )}
         </div>
       )}
