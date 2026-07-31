@@ -191,7 +191,7 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
 - Expanded width 260px, collapsed to a 68px icon-only rail via a header toggle button; content transitions (labels fade/disappear), no reflow jank.
 - Header row: logo (`public/logo.png`, small) + "Slash" wordmark (hidden when collapsed) on the left, collapse-toggle icon button on the right.
 - Primary action: a "새 검색" (new search) button, icon+label, pinned near the top.
-- Nav: icon+label rows (히스토리 / 대시보드 / 즐겨찾기 / 파일) — muted by default, foreground on hover, no gradient here (gradient stays reserved for the mark/focus-ring/wash per §2).
+- Nav: icon+label rows (히스토리 / 대시보드 / 즐겨찾기 / 파일 / 일정) — only 히스토리 and 대시보드 route anywhere; the rest are named but inert, same as the settings categories (§4 Settings). Muted by default, foreground on hover, no gradient here (gradient stays reserved for the mark/focus-ring/wash per §2).
 - Below nav: a "최근" (recent) list of past query strings, plain-text rows, truncate with ellipsis, hidden entirely when collapsed (not just visually squeezed).
 - Footer: a profile row (avatar + name + plan label) pinned to the bottom via a border-top hairline; clicking it is how Settings is opened — **there is no separate settings gear in the main content area**, this is the one entry point (mirrors the reference's "settings via profile," not a persistent header icon).
 - Surface: `surface` background, `hairline` right border — a distinct flat panel from the main content area (which sits on `canvas`, with the gradient wash in light mode).
