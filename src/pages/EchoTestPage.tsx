@@ -37,7 +37,9 @@ async function unwrap<T>(res: Response): Promise<T> {
 
 export function EchoTestPage() {
   const [baseUrl, setBaseUrl] = useState('http://localhost:4000')
-  const [username, setUsername] = useState('web-test-user')
+  // agent-app이 자동 페어링 시 로그인하는 시험 계정과 반드시 같아야 같은 기기가 보인다
+  // (agent-app/src/main.cjs obtainPairingCode 참고).
+  const [email, setEmail] = useState('agent-app-tester@example.com')
   const [message, setMessage] = useState('hello slash')
   const [log, setLog] = useState<string[]>([])
   const [device, setDevice] = useState<DeviceSummary | null>(null)
@@ -57,11 +59,19 @@ export function EchoTestPage() {
     setEvents([])
 
     try {
-      appendLog(`인증: Bearer ${username}`)
+      appendLog(`시험 로그인: ${email}`)
+      const loginRes = await fetch(`${baseUrl}/test/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, displayName: 'web-test' }),
+      })
+      const login = (await loginRes.json()) as { token: string }
+      const token = login.token
+      appendLog('로그인 완료')
 
       appendLog('READY 상태 기기 조회 중…')
       const devicesRes = await fetch(`${baseUrl}/api/v1/devices`, {
-        headers: { Authorization: `Bearer ${username}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       const devices = await unwrap<DeviceSummary[]>(devicesRes)
       const readyDevice = devices.find((d) => d.status === 'READY')
@@ -77,7 +87,7 @@ export function EchoTestPage() {
       const createRes = await fetch(`${baseUrl}/api/v1/requests`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${username}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Idempotency-Key': crypto.randomUUID(),
         },
@@ -94,7 +104,7 @@ export function EchoTestPage() {
       for (let i = 0; i < 25; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200))
         const taskRes = await fetch(`${baseUrl}/api/v1/tasks/${created.taskId}`, {
-          headers: { Authorization: `Bearer ${username}` },
+          headers: { Authorization: `Bearer ${token}` },
         })
         const polled = await unwrap<TaskDetail>(taskRes)
         if (polled.status === 'SUCCEEDED' || polled.status === 'FAILED') {
@@ -111,7 +121,7 @@ export function EchoTestPage() {
       appendLog(`최종 상태: ${finalTask.status}`)
 
       const eventsRes = await fetch(`${baseUrl}/api/v1/tasks/${created.taskId}/events`, {
-        headers: { Authorization: `Bearer ${username}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       const eventList = await unwrap<TaskEvent[]>(eventsRes)
       setEvents(eventList)
@@ -140,11 +150,11 @@ export function EchoTestPage() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        사용자명 (Bearer 토큰으로 그대로 사용)
+        시험 로그인 이메일 (agent-app 자동 페어링 계정과 같아야 기기가 보인다)
         <input
           className="rounded border px-3 py-2"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
       </label>
 
