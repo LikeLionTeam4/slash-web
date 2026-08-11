@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from 'react-router'
-import { isLoggedIn } from '../../lib/auth'
+import { useAuth } from '../../hooks/authContext'
 
 /**
  * `RequireAuth`의 반대편 — 로그인한 사용자에게는 의미가 없는 라우트(로그인 화면)를 감싼다.
@@ -9,6 +9,8 @@ import { isLoggedIn } from '../../lib/auth'
  * 눌렀을 때 다시 /login으로 갔다가 곧바로 튕겨나오는 왕복이 생긴다.
  */
 export function RequireGuest() {
-  if (isLoggedIn()) return <Navigate to="/new" replace />
+  const { status } = useAuth()
+  if (status === 'checking') return null
+  if (status === 'authenticated') return <Navigate to="/new" replace />
   return <Outlet />
 }

@@ -1,14 +1,15 @@
 import { useNavigate } from 'react-router'
-import { homePathForSession } from '../../lib/auth'
+import { useHomePath } from '../../hooks/authContext'
 
 export function NotFoundPage() {
   const navigate = useNavigate()
+  const homePath = useHomePath()
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-canvas px-6 font-sans text-foreground">
       <button
         type="button"
-        onClick={() => navigate(homePathForSession())}
+        onClick={() => navigate(homePath)}
         className="-mx-2 mb-10 flex w-fit items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface"
       >
         <img src="/logo.png" alt="" className="h-7 w-7 rounded-[7px]" />
@@ -22,7 +23,7 @@ export function NotFoundPage() {
 
         <button
           type="button"
-          onClick={() => navigate(homePathForSession())}
+          onClick={() => navigate(homePath)}
           className="mt-8 w-full rounded-full bg-foreground px-4 py-3 text-sm font-medium text-canvas transition-opacity hover:opacity-90"
         >
           홈으로 가기

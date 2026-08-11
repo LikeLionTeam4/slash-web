@@ -1,9 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { homePathForSession, setLoggedIn } from '../../lib/auth'
-import { Mail } from 'lucide-react'
-
-type Step = 'email' | 'sent' | 'code'
+import { useAuth, useHomePath } from '../../hooks/authContext'
 
 function GoogleIcon() {
   return (
@@ -16,28 +13,18 @@ function GoogleIcon() {
   )
 }
 
+// 이메일 입력·인증코드 단계는 이 화면이 직접 그리지 않는다 — Cognito Managed Login
+// 페이지(리다이렉트 대상)가 그 UX 전체를 대신 맡는다(계약서 §5, Authorization Code+PKCE).
+// 여기서는 그리로 보내는 버튼 두 개만 있으면 된다.
 export function LoginPage() {
   const navigate = useNavigate()
-  const [step, setStep] = useState<Step>('email')
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
+  const homePath = useHomePath()
+  const { login } = useAuth()
+  const [redirecting, setRedirecting] = useState(false)
 
-  const handleEmailSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!email.trim()) return
-    setStep('sent')
-  }
-
-  const handleCodeSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!code.trim()) return
-    completeLogin()
-  }
-
-  // TODO: 백엔드 연동 시 실제 인증으로 교체한다. 지금은 로그인 여부 플래그만 세운다.
-  const completeLogin = () => {
-    setLoggedIn()
-    navigate('/new')
+  const handleEmailContinue = async () => {
+    setRedirecting(true)
+    await login()
   }
 
   return (
@@ -45,7 +32,7 @@ export function LoginPage() {
       <div className="flex w-full flex-col px-10 py-8 lg:w-1/2">
         <button
           type="button"
-          onClick={() => navigate(homePathForSession())}
+          onClick={() => navigate(homePath)}
           className="-mx-2 flex w-fit items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface"
         >
           <img src="/logo.png" alt="" className="h-7 w-7 rounded-[7px]" />
@@ -58,115 +45,30 @@ export function LoginPage() {
             <p className="mt-3 text-muted">파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.</p>
 
             <div className="mt-8 rounded-2xl border border-hairline bg-surface p-6 text-left">
-              {step === 'email' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={completeLogin}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-surface px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-raised"
-                  >
-                    <GoogleIcon />
-                    Google로 계속하기
-                  </button>
+              <button
+                type="button"
+                disabled
+                title="Google 로그인은 준비 중입니다"
+                className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-full border border-hairline bg-surface px-4 py-3 text-sm font-medium text-foreground opacity-50"
+              >
+                <GoogleIcon />
+                Google로 계속하기
+              </button>
 
-                  <div className="my-4 flex items-center gap-3 text-xs text-muted">
-                    <div className="h-px flex-1 bg-hairline" />
-                    또는
-                    <div className="h-px flex-1 bg-hairline" />
-                  </div>
+              <div className="my-4 flex items-center gap-3 text-xs text-muted">
+                <div className="h-px flex-1 bg-hairline" />
+                또는
+                <div className="h-px flex-1 bg-hairline" />
+              </div>
 
-                  <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="이메일을 입력하세요"
-                      className="w-full rounded-full border border-hairline bg-canvas px-4 py-3 text-sm text-foreground placeholder:text-muted focus:border-focus focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full rounded-full bg-foreground px-4 py-3 text-sm font-medium text-canvas transition-opacity hover:opacity-90"
-                    >
-                      이메일로 계속하기
-                    </button>
-                  </form>
-                </>
-              )}
-
-              {step === 'sent' && (
-                <div className="flex flex-col items-center gap-4 py-2 text-center">
-                  <Mail className="text-accent-blue" size={28} />
-                  <p className="text-sm text-foreground">
-                    계속하려면 다음 주소로 전송된 링크를 클릭하세요
-                    <br />
-                    <span className="font-medium">{email}</span>
-                  </p>
-                  <div className="flex flex-col gap-2 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => setStep('code')}
-                      className="text-muted underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                      인증 코드 입력
-                    </button>
-                    <button
-                      type="button"
-                      className="text-muted underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                      이메일 재전송
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStep('email')}
-                      className="text-muted underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                      다른 이메일 사용
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {step === 'code' && (
-                <>
-                  <p className="text-sm text-foreground">
-                    다음 주소로 전송된 인증 코드를 입력하세요
-                    <br />
-                    <span className="font-medium">{email}</span>
-                  </p>
-                  <form onSubmit={handleCodeSubmit} className="mt-4 flex flex-col gap-3">
-                    <input
-                      type="text"
-                      required
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      placeholder="인증 코드 입력"
-                      className="w-full rounded-full border border-hairline bg-canvas px-4 py-3 text-center text-sm text-foreground placeholder:text-muted focus:border-focus focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full rounded-full bg-foreground px-4 py-3 text-sm font-medium text-canvas transition-opacity hover:opacity-90"
-                    >
-                      이메일 주소 인증
-                    </button>
-                  </form>
-                  <p className="mt-4 text-center text-xs text-muted">
-                    받은 편지함에서 이메일을 찾을 수 없나요?{' '}
-                    <button type="button" className="text-foreground underline-offset-2 hover:underline">
-                      다시 보내기
-                    </button>
-                    <br />
-                    이메일이 잘못되었나요?{' '}
-                    <button
-                      type="button"
-                      onClick={() => setStep('email')}
-                      className="text-foreground underline-offset-2 hover:underline"
-                    >
-                      이메일 주소 변경
-                    </button>
-                  </p>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={handleEmailContinue}
+                disabled={redirecting}
+                className="w-full rounded-full bg-foreground px-4 py-3 text-sm font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {redirecting ? '이동 중...' : '이메일로 계속하기'}
+              </button>
             </div>
           </div>
         </div>

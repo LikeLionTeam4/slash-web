@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command, Download } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
-import { clearLogin, homePathForSession } from '../lib/auth'
+import { useAuth, useHomePath } from '../hooks/authContext'
 import { RECENT_ENTRIES } from '../lib/mockHistory'
 import { EMAIL } from '../lib/user'
 import { useAgentStatus } from '../hooks/agentStatusContext'
@@ -55,6 +55,8 @@ export function Sidebar({
   const agentStatus = useAgentStatus()
   const location = useLocation()
   const navigate = useNavigate()
+  const homePath = useHomePath()
+  const { logout } = useAuth()
   // 레일(아이콘만) 모드는 데스크톱에서만 — 모바일 서랍은 열리면 항상 제 너비로 보인다.
   const rail = isDesktop && collapsed
 
@@ -85,7 +87,7 @@ export function Sidebar({
           {!rail && (
             <button
               type="button"
-              onClick={() => navigate(homePathForSession())}
+              onClick={() => navigate(homePath)}
               className="-mx-1 flex items-center gap-2 rounded-[8px] px-2 py-1 text-control font-semibold transition-colors hover:bg-surface-raised"
             >
               <img src="/logo.png" alt="" className="h-6 w-6 rounded-[6px]" />
@@ -213,11 +215,10 @@ export function Sidebar({
               email={EMAIL}
               onOpenSettings={onOpenSettings}
               onOpenShortcuts={onOpenShortcuts}
-              // 뒤로 가기로 로그인 전 화면에 되돌아가지 않도록 히스토리를 남기지 않는다.
-              // TODO: 백엔드 연동 시 여기서 세션/토큰 정리도 함께 한다.
+              // logout()이 Cognito 로그아웃 엔드포인트로 전체 페이지 리다이렉트를 일으키므로
+              // 이후 navigate가 필요 없다 — 브라우저가 이미 이 페이지를 떠난다.
               onLogout={() => {
-                clearLogin()
-                navigate('/login', { replace: true })
+                void logout()
               }}
               onClose={() => setProfileMenuOpen(false)}
             />
