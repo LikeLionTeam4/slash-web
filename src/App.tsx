@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { CallbackPage } from './pages/CallbackPage'
+import { NotFoundPage } from './pages/NotFoundPage'
 import { RequireAuth } from './features/auth/RequireAuth'
 import { RequireGuest } from './features/auth/RequireGuest'
 import { AppearanceProvider } from './hooks/appearanceContext'
@@ -62,6 +63,9 @@ function App() {
               }
             />
           </Route>
+
+          {/* 정의된 라우트가 하나도 안 맞을 때 — 로그인 여부와 무관하게 항상 뜬다. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AppearanceProvider>
     </AuthProvider>
