@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Trash2 } from 'lucide-react'
+import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Trash2, Loader2 } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { MicSettingsPopover } from './MicSettingsPopover'
 import {
@@ -16,6 +16,8 @@ import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
 import { useFileSearch } from '../hooks/fileSearchContext'
 import { useAgentStatus } from '../hooks/agentStatusContext'
+import { ApiError } from '../lib/apiClient'
+import { createTaskRequest, getTask, isTerminalTaskStatus, type SystemStatusResult, type TaskStatus } from '../lib/tasks'
 
 function AddMenuItem({
   icon: Icon,
@@ -75,6 +77,40 @@ function withObjectParticle(noun: string): string {
   return `${noun}${hasFinalConsonant ? '을' : '를'}`
 }
 
+/** 진행 중 상태별 안내 문구 — frontend-api-contract.md §W1-04 "상태값" 표. */
+const TASK_STATUS_LABELS: Partial<Record<TaskStatus, string>> = {
+  ANALYZING: '무슨 요청인지 분석하는 중이에요',
+  QUEUED: 'PC로 보냈어요, 수락을 기다리는 중이에요',
+  RUNNING: '실행 중이에요',
+  WAITING_FOR_DEVICE: 'PC가 꺼져 있어요 — 켜지면 자동으로 실행돼요',
+  NEEDS_CLARIFICATION: '추가 정보가 필요해요',
+}
+
+/** 실패한 작업의 errorCode별 안내 — 계약서 §4 표 중 /status가 실제로 낼 수 있는 것들. */
+const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
+  DEVICE_NOT_READY: 'PC 연결 상태를 확인해주세요.',
+  DEVICE_BUSY: '다른 작업을 실행 중이에요. 잠시 후 다시 시도해주세요.',
+  TASK_TYPE_NOT_SUPPORTED: '이 PC가 지원하지 않는 기능이에요.',
+  TASK_EXPIRED: '실행 기한이 지났어요.',
+  UNRECOGNIZED_COMMAND: '요청을 알아듣지 못했어요.',
+  AGENT_REJECTED: 'PC가 이 요청을 받지 않았어요.',
+  AGENT_TASK_FAILED: 'PC에서 실행이 끝나지 못했어요.',
+  NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
+  UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
+}
+
+function taskErrorMessage(code: string | null): string {
+  return (code && TASK_ERROR_MESSAGES[code]) || '요청이 실패했어요.'
+}
+
+type StatusTaskState =
+  | { phase: 'idle' }
+  | { phase: 'running'; status: TaskStatus }
+  | { phase: 'done'; result: SystemStatusResult }
+  | { phase: 'failed'; message: string }
+
+const STATUS_POLL_INTERVAL_MS = 2000
+
 export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -96,6 +132,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // 지금 입력 중인 값은 `value`에 있다 — 명령어와 검색어는 한 문자열로 합치지 않고 끝까지 따로
   // 들고 있다가 백엔드에도 따로 보낸다.
   const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
+  const [statusTask, setStatusTask] = useState<StatusTaskState>({ phase: 'idle' })
+  const statusPollTimeoutRef = useRef<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileListRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
@@ -169,7 +207,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
   const showModelPicker = commandMode === null && trimmed === '/모델'
   const showTrash = commandMode === null && trimmed === '/파일/휴지통'
-  const showSuggestions = !!suggestions && !showModelPicker && !showTrash
+  const showStatusCommand = commandMode === null && trimmed === '/상태'
+  const showSuggestions = !!suggestions && !showModelPicker && !showTrash && !showStatusCommand
   // 폴더가 하나도 없으면 파일 이름을 다 친 뒤가 아니라 `/파일`에 들어서는 순간 알려준다 —
   // 검색어를 다 입력하고 나서야 "검색할 데가 없다"고 하는 건 너무 늦다.
   const needsFolderSetup =
@@ -200,6 +239,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     !showSuggestions &&
     !showModelPicker &&
     !showTrash &&
+    !showStatusCommand &&
     !showFileSearch &&
     !showModelSearch &&
     !showPlaceholderMsg &&
@@ -237,6 +277,24 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       setModelHighlight(0)
     }
   }, [modelPickerActive])
+
+  // /status를 벗어나면(입력을 지우거나 다른 명령으로 바꾸면) 진행 중이던 폴링도 함께 멈춘다 —
+  // 안 그러면 화면에 없는 패널을 위해 계속 GET /api/v1/tasks/{taskId}를 부르게 된다.
+  useEffect(() => {
+    if (showStatusCommand) return
+    if (statusPollTimeoutRef.current !== null) {
+      clearTimeout(statusPollTimeoutRef.current)
+      statusPollTimeoutRef.current = null
+    }
+    setStatusTask({ phase: 'idle' })
+  }, [showStatusCommand])
+
+  // 언마운트 시에도 폴링 타이머를 남기지 않는다.
+  useEffect(() => {
+    return () => {
+      if (statusPollTimeoutRef.current !== null) clearTimeout(statusPollTimeoutRef.current)
+    }
+  }, [])
 
   // /모델/검색 stops being the active command (query cleared, chain changed, etc.) — collapse
   // the inline "모델 변경" picker so it doesn't linger open under a different panel next time.
@@ -301,6 +359,47 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  /** POST /api/v1/requests → GET /api/v1/tasks/{taskId} 2초 폴링 — WSS는 아직 안 붙였다(§7,
+   *  "WSS 안 붙어도 폴링만으로 화면은 정상 동작"이 계약이라 당장은 이걸로 충분하다). */
+  function pollStatusTask(taskId: string) {
+    getTask(taskId)
+      .then((task) => {
+        if (task.status === 'SUCCEEDED') {
+          setStatusTask({ phase: 'done', result: task.result! })
+          return
+        }
+        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
+          setStatusTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
+          return
+        }
+        setStatusTask({ phase: 'running', status: task.status })
+        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(taskId), STATUS_POLL_INTERVAL_MS)
+      })
+      .catch(() => {
+        // 폴링 중 일시적 오류는 다음 주기에 다시 시도한다 — Task 자체는 서버에 이미 접수돼 있다.
+        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(taskId), STATUS_POLL_INTERVAL_MS)
+      })
+  }
+
+  async function runStatusCommand() {
+    if (statusTask.phase === 'running') return
+    setStatusTask({ phase: 'running', status: 'ANALYZING' })
+    try {
+      const created = await createTaskRequest('/상태')
+      if (isTerminalTaskStatus(created.status)) {
+        pollStatusTask(created.taskId) // 드물지만 접수 시점에 이미 끝난 경우 — 같은 경로로 한 번 더 조회해 result를 받는다.
+      } else {
+        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(created.taskId), STATUS_POLL_INTERVAL_MS)
+        setStatusTask({ phase: 'running', status: created.status })
+      }
+    } catch (err) {
+      setStatusTask({
+        phase: 'failed',
+        message: err instanceof ApiError ? err.message : '요청을 보내지 못했어요. 잠시 후 다시 시도해주세요.',
+      })
+    }
+  }
+
   function submitCommand() {
     if (commandMode && stepped) {
       // 값을 여러 개 받는 명령은 Enter마다 한 값씩 칩으로 확정한다. 마지막 값까지 모이면
@@ -332,6 +431,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     if (showFileSearch && fileResults.length > 0) {
       const file = fileResults[fileHighlight] ?? fileResults[0]
       fileSearch.openFile(file.folderName, file.path)
+      return
+    }
+    if (showStatusCommand) {
+      runStatusCommand()
       return
     }
     if (commandMode || deepLink) {
@@ -967,6 +1070,45 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             ))
           )}
           {fileSearch.error && <p className="px-4 py-2 text-xs text-accent-blue">{fileSearch.error}</p>}
+        </div>
+      )}
+
+      {showStatusCommand && (
+        <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
+          {statusTask.phase === 'idle' && <p className="text-sm text-muted">Enter를 누르면 이 PC의 상태를 확인해요.</p>}
+          {statusTask.phase === 'running' && (
+            <p className="flex items-center gap-1.5 text-sm text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              {TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'}
+            </p>
+          )}
+          {statusTask.phase === 'failed' && <p className="text-sm text-accent-blue">{statusTask.message}</p>}
+          {statusTask.phase === 'done' && (
+            <div className="flex flex-col gap-2">
+              {(
+                [
+                  { label: 'CPU', percent: statusTask.result.cpuPercent, detail: null },
+                  {
+                    label: '메모리',
+                    percent: statusTask.result.memoryPercent,
+                    detail: `${statusTask.result.memoryUsedMb.toLocaleString()} / ${statusTask.result.memoryTotalMb.toLocaleString()} MB`,
+                  },
+                  {
+                    label: '디스크',
+                    percent: statusTask.result.diskPercent,
+                    detail: `${statusTask.result.diskUsedMb.toLocaleString()} / ${statusTask.result.diskTotalMb.toLocaleString()} MB`,
+                  },
+                ] as const
+              ).map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted">{row.label}</span>
+                  <span className="text-foreground">
+                    {row.percent.toFixed(1)}%{row.detail ? ` · ${row.detail}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
