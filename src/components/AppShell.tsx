@@ -8,6 +8,7 @@ import { ShortcutsDialog } from './ShortcutsDialog'
 import { useAppearance } from '../hooks/appearanceContext'
 import { FileSearchProvider } from '../hooks/fileSearchContext'
 import { AgentStatusProvider } from '../hooks/agentStatusContext'
+import { CurrentUserProvider } from '../hooks/currentUserContext'
 import { DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId, type SettingsCategoryId } from '../lib/settingsCategory'
 
 const SETTINGS_HASH_PREFIX = '#settings/'
@@ -49,6 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <FileSearchProvider>
       <AgentStatusProvider>
+      <CurrentUserProvider>
       <div className="flex h-screen font-sans text-foreground">
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -82,6 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
         {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
       </div>
+      </CurrentUserProvider>
       </AgentStatusProvider>
     </FileSearchProvider>
   )

@@ -5,8 +5,8 @@ import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
 import { useAuth, useHomePath } from '../hooks/authContext'
 import { RECENT_ENTRIES } from '../lib/mockHistory'
-import { EMAIL } from '../lib/user'
 import { useAgentStatus } from '../hooks/agentStatusContext'
+import { useCurrentUser } from '../hooks/currentUserContext'
 import type { SettingsCategoryId } from '../lib/settingsCategory'
 
 /** Tailwind의 `md:`와 같은 값이어야 한다 — 접힘(레일) 모드를 쓸지 말지를 JS와 CSS가 같이 판단한다. */
@@ -57,6 +57,9 @@ export function Sidebar({
   const navigate = useNavigate()
   const homePath = useHomePath()
   const { logout } = useAuth()
+  const { displayName, email } = useCurrentUser()
+  const profileLabel = displayName ?? '고객'
+  const avatarLetter = (displayName ?? email ?? 'S').charAt(0).toUpperCase()
   // 레일(아이콘만) 모드는 데스크톱에서만 — 모바일 서랍은 열리면 항상 제 너비로 보인다.
   const rail = isDesktop && collapsed
 
@@ -185,11 +188,11 @@ export function Sidebar({
             }`}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-sm font-medium text-foreground">
-              S
+              {avatarLetter}
             </div>
             {!rail && (
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">Slash 사용자</p>
+                <p className="truncate text-sm font-medium text-foreground">{profileLabel}</p>
                 <p className="text-xs text-muted">무료 플랜</p>
               </div>
             )}
@@ -212,7 +215,7 @@ export function Sidebar({
 
           {profileMenuOpen && (
             <ProfileMenu
-              email={EMAIL}
+              email={email ?? ''}
               onOpenSettings={onOpenSettings}
               onOpenShortcuts={onOpenShortcuts}
               // logout()이 Cognito 로그아웃 엔드포인트로 전체 페이지 리다이렉트를 일으키므로

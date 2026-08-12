@@ -33,6 +33,9 @@ export const COMMAND_TREE: CommandNode[] = [
     ],
   },
   { id: '모델', label: '모델', description: '답변에 사용할 AI 모델 선택' },
+  // slash-nlu의 SLASH_ALIASES(intents.py)가 실제로 인식하는 별칭이다 — '상태'·'status' 둘 다
+  // SYSTEM_STATUS로 매핑되지만, 이 앱의 다른 명령어가 전부 한글이라 그쪽에 맞춘다.
+  { id: '상태', label: '상태', description: '이 PC의 CPU·메모리·디스크 사용량을 확인해요' },
   {
     id: '네이버',
     label: '네이버',

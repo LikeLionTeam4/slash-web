@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   X,
   Monitor,
@@ -10,6 +10,7 @@ import {
   Pencil,
   Download,
   Info,
+  Loader2,
 } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 import type { FontSize } from '../hooks/useFontSize'
@@ -18,6 +19,8 @@ import { useAgentStatus } from '../hooks/agentStatusContext'
 import { getClientInfo } from '../lib/clientInfo'
 import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
 import { Tooltip } from './Tooltip'
+import { createPairingRequest, getPairingStatus, type PairingRequest } from '../lib/pairing'
+import { ApiError } from '../lib/apiClient'
 
 const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] = [
   { id: 'system', icon: Monitor, label: '시스템' },
@@ -75,37 +78,109 @@ interface RegisteredDevice {
   mockAgentOnline?: boolean
 }
 
-// slash-agent가 아직 없어서 실제로 페어링된 적 없는 목업 데이터. "이 PC"로 표시된 한 대만
-// useAgentStatus()의 실시간 값을 반영한다.
-const INITIAL_DEVICES: RegisteredDevice[] = [
-  { id: 'device-1', name: '메인컴', registeredAt: '2023.12.27', isThisDevice: true },
-  { id: 'device-2', name: '서브', registeredAt: '2025.08.29', mockAgentOnline: true },
-]
+// GET /api/v1/devices가 아직 없어(#1) 새로고침 때마다 목록을 다시 불러올 방법이 없다 —
+// 그래서 목업으로 채워두지 않고 빈 채로 시작한다. 이번 세션에서 실제로 페어링한 기기만
+// (§ PairingPanelState) 여기 쌓인다. 그 API가 생기면 이 빈 배열을 초기 조회로 바꾼다.
+const INITIAL_DEVICES: RegisteredDevice[] = []
 
 function todayLabel(): string {
   const d = new Date()
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 
+type PairingPanelState =
+  | { phase: 'idle' }
+  | { phase: 'issuing' }
+  | { phase: 'active'; request: PairingRequest; remainingSeconds: number }
+  | { phase: 'expired'; request: PairingRequest }
+  | { phase: 'error'; message: string }
+
+const PAIRING_POLL_INTERVAL_MS = 2500
+
+function remainingSecondsFrom(expiresAt: string): number {
+  return Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000))
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 // 지정 PC 관리. 브라우저 요청을 실제로 받아 백엔드에 대신 요청하는 로컬 에이전트가 이 PC에
 // 설치·실행 중인지 확인하고, 이 계정으로 접속 가능한 PC 목록을 관리하는 자리.
+//
+// 등록 흐름(frontend-api-contract.md "PC 등록 화면(W1-02)"): 코드 발급 → 6자리 표시 + 5분 카운트다운
+// → 2~3초 간격 폴링 → CLAIMED 되면 등록 완료. pairingCode는 발급 응답에서 딱 한 번만 오므로
+// 화면을 벗어나면 재발급해야 한다 — 그래서 코드가 없으면 폴링 자체를 멈춘다.
 function PcManagement() {
   const agentStatus = useAgentStatus()
   const [devices, setDevices] = useState<RegisteredDevice[]>(INITIAL_DEVICES)
   const [renamingId, setRenamingId] = useState<string | null>(null)
-
-  const addDevice = () => {
-    if (devices.length >= MAX_DEVICES) return
-    setDevices((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), name: `PC ${prev.length + 1}`, registeredAt: todayLabel() },
-    ])
-  }
+  const [pairing, setPairing] = useState<PairingPanelState>({ phase: 'idle' })
 
   const removeDevice = (id: string) => setDevices((prev) => prev.filter((d) => d.id !== id))
 
   const renameDevice = (id: string, name: string) =>
     setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, name: name.trim() || d.name } : d)))
+
+  const issuePairingCode = async () => {
+    setPairing({ phase: 'issuing' })
+    try {
+      const request = await createPairingRequest()
+      setPairing({ phase: 'active', request, remainingSeconds: remainingSecondsFrom(request.expiresAt) })
+    } catch (err) {
+      setPairing({
+        phase: 'error',
+        message: err instanceof ApiError ? err.message : '코드를 발급받지 못했어요. 잠시 후 다시 시도해주세요.',
+      })
+    }
+  }
+
+  // 카운트다운 — 1초마다 만료까지 남은 시간을 다시 계산한다. 0이 되면 폴링을 멈추고 "코드 다시
+  // 받기" 상태로 넘어간다 (서버 응답을 기다리지 않고 클라이언트 시계 기준으로 즉시 반영).
+  useEffect(() => {
+    if (pairing.phase !== 'active') return
+    const id = setInterval(() => {
+      setPairing((prev) => {
+        if (prev.phase !== 'active') return prev
+        const remainingSeconds = remainingSecondsFrom(prev.request.expiresAt)
+        if (remainingSeconds <= 0) return { phase: 'expired', request: prev.request }
+        return { ...prev, remainingSeconds }
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [pairing.phase])
+
+  // 등록 진행 상태 폴링 — CLAIMED로 바뀌면 기기 목록에 실제 deviceId로 추가하고 패널을 닫는다.
+  // pairingRequestId만 의존성에 넣는다 — pairing 객체 전체를 넣으면 카운트다운이 1초마다 바꾸는
+  // remainingSeconds 때문에 매초 인터벌이 재생성돼 2.5초 폴링이 한 번도 못 나간다.
+  const activePairingRequestId = pairing.phase === 'active' ? pairing.request.pairingRequestId : null
+  useEffect(() => {
+    if (!activePairingRequestId) return
+    const pairingRequestId = activePairingRequestId
+    let cancelled = false
+
+    const poll = async () => {
+      try {
+        const status = await getPairingStatus(pairingRequestId)
+        if (cancelled || status.status !== 'CLAIMED') return
+        setDevices((prev) => [
+          ...prev,
+          { id: status.deviceId, name: `PC ${prev.length + 1}`, registeredAt: todayLabel() },
+        ])
+        setPairing({ phase: 'idle' })
+      } catch {
+        // 폴링 중 일시적 네트워크 오류는 다음 주기에 다시 시도한다 — 카운트다운이 만료를 대신 처리한다.
+      }
+    }
+
+    const id = setInterval(poll, PAIRING_POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [activePairingRequestId])
 
   return (
     <>
@@ -118,17 +193,69 @@ function PcManagement() {
         </h2>
         <button
           type="button"
-          onClick={addDevice}
-          disabled={devices.length >= MAX_DEVICES}
+          onClick={issuePairingCode}
+          disabled={devices.length >= MAX_DEVICES || pairing.phase === 'issuing' || pairing.phase === 'active'}
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15 disabled:pointer-events-none disabled:opacity-40"
         >
-          <Plus size={14} />
+          {pairing.phase === 'issuing' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           PC 기기 등록
         </button>
       </div>
       <p className="mb-4 text-xs text-muted">
         등록된 PC 기기 현황과, 이 PC의 로컬 에이전트가 정상 동작 중인지 확인할 수 있어요.
       </p>
+
+      {(pairing.phase === 'active' || pairing.phase === 'expired' || pairing.phase === 'error') && (
+        <div className="mb-4 rounded-xl border border-hairline p-4 text-center">
+          {pairing.phase === 'error' ? (
+            <>
+              <p className="mb-3 text-sm text-muted">{pairing.message}</p>
+              <button
+                type="button"
+                onClick={issuePairingCode}
+                className="text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
+              >
+                다시 시도
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-muted">
+                이 코드를 등록할 PC의 에이전트에 입력하세요
+              </p>
+              <p className="mb-2 text-3xl font-bold tracking-[0.2em] text-foreground">
+                {pairing.request.pairingCode}
+              </p>
+              {pairing.phase === 'active' ? (
+                <p className="mb-3 flex items-center justify-center gap-1.5 text-xs text-muted">
+                  <Loader2 size={12} className="animate-spin" />
+                  등록 대기 중 · {formatCountdown(pairing.remainingSeconds)} 후 만료
+                </p>
+              ) : (
+                <p className="mb-3 text-xs text-muted">코드가 만료됐어요.</p>
+              )}
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={issuePairingCode}
+                  className="text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
+                >
+                  코드 다시 받기
+                </button>
+                {pairing.phase === 'active' && (
+                  <button
+                    type="button"
+                    onClick={() => setPairing({ phase: 'idle' })}
+                    className="text-xs font-medium text-muted transition-colors hover:text-foreground"
+                  >
+                    취소
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl border border-hairline p-4">
         <p className="mb-3 text-sm font-semibold">
