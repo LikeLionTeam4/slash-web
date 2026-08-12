@@ -24,9 +24,9 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   # slash-infra: environments/local/frontend terraform output 값
-  AWS_ROLE_ARN: arn:aws:iam::727646470302:role/slash-frontend-deploy-local
-  S3_BUCKET: slash-web-local-727646470302
-  CLOUDFRONT_DISTRIBUTION_ID: E766R09SPSUH8
+  AWS_ROLE_ARN: arn:aws:iam::061039804626:role/slash-frontend-deploy-local
+  S3_BUCKET: slash-web-local-061039804626
+  CLOUDFRONT_DISTRIBUTION_ID: E3FZBJIG5MLJ1M
 
 jobs:
   deploy:
