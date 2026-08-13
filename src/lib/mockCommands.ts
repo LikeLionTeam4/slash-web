@@ -1,6 +1,6 @@
 // Mock slash-command chaining (`/네임스페이스[/액션] 쿼리`) for frontend-only UX testing.
-// `파일` (useLocalFileSearch) and `모델/검색` (SearchBar's model chip/picker) are real —
-// this file only covers commands with no backend/API yet. Don't ship this data as real.
+// `파일` (backend FILE_SEARCH task, SearchBar) and `모델/검색` (SearchBar's model chip/picker)
+// are real — this file only covers commands with no backend/API yet. Don't ship this data as real.
 
 export type ChainedCommand = { namespace: string; action: string; query: string }
 
