@@ -384,25 +384,22 @@ function PcManagement() {
 }
 
 /**
- * `/파일` 검색 대상 폴더 안내. 폴더는 이 화면에서 고르지 않는다 — PC에 설치한 로컬 에이전트가
- * 등록한 폴더 중 서버가 검색할 때마다 자동으로 고른다(frontend-api-contract.md, slash-api
- * PR #18). 여기서는 그 사실과 "지정 PC 관리"로 가는 길만 안내한다.
+ * `/파일` 검색 대상 폴더 안내. 폴더는 이 화면(웹)이 아니라 PC에 설치한 로컬 에이전트 앱에서
+ * 관리한다(에이전트의 트레이 아이콘 → 색인 폴더 관리 창) — 그 창을 여기서 원격으로 열게
+ * 하려면 slash-api/slash-agent 쪽에 새 메시지 타입이 필요해서(WSS로 이미 연결된 채널 재사용)
+ * 이번 PR 범위(웹 단독 변경) 밖이다. "지정 PC 관리" 탭도 페어링 상태만 보여줄 뿐 폴더는 없어서
+ * 그리로 보내는 버튼은 만들지 않는다 — 실제로 폴더를 관리할 수 있는 곳(에이전트 트레이 아이콘)만
+ * 문장으로 안내한다.
  */
-function SearchFolders({ onOpenPcManagement }: { onOpenPcManagement: () => void }) {
+function SearchFolders() {
   return (
     <>
       <h3 className="mb-1 text-sm font-semibold">파일 검색 폴더</h3>
-      <p className="mb-3 text-xs text-muted">
+      <p className="text-xs text-muted">
         <code className="text-foreground">/파일</code> 검색 대상 폴더는 여기서 정하지 않아요. PC에 설치한
-        로컬 에이전트에서 등록한 폴더 중 서버가 검색할 때마다 자동으로 골라요.
+        로컬 에이전트 앱의 트레이 아이콘에서 폴더를 추가·관리하면, 검색할 때마다 서버가 그중에서 자동으로
+        골라요.
       </p>
-      <button
-        type="button"
-        onClick={onOpenPcManagement}
-        className="rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
-      >
-        지정 PC 관리로 이동
-      </button>
     </>
   )
 }
@@ -552,7 +549,7 @@ export function SettingsDialog({
             </div>
           ) : active === 'files' ? (
             <div className="flex flex-col gap-6">
-              <SearchFolders onOpenPcManagement={() => onActiveChange('plugins')} />
+              <SearchFolders />
             </div>
           ) : active === 'plugins' ? (
             <div className="flex flex-col gap-6">
