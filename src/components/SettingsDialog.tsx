@@ -20,6 +20,7 @@ import { getClientInfo } from '../lib/clientInfo'
 import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
 import { Tooltip } from './Tooltip'
 import { createPairingRequest, getPairingStatus, type PairingRequest } from '../lib/pairing'
+import { listDevices, type DeviceStatus } from '../lib/devices'
 import { ApiError } from '../lib/apiClient'
 
 const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] = [
@@ -72,19 +73,14 @@ interface RegisteredDevice {
   name: string
   registeredAt: string
   isThisDevice?: boolean
-  // 이 PC가 아닌 기기는 실제로 상태를 확인할 방법이 없다(다른 물리적 기기의 localhost는 이
-  // 브라우저에서 애초에 닿지 않는다) — 백엔드가 각 에이전트의 연결 여부를 알려주는 경로가 생기기
-  // 전까지는 데모용 목업 값으로만 보여준다. undefined면 "상태 모름"으로 표시된다.
-  mockAgentOnline?: boolean
+  // GET /api/v1/devices가 돌려주는 값 — 서버가 하트비트로 판정한 실제 연결 상태다. 이 PC가
+  // 아닌 기기는 다른 물리적 기기의 localhost라 브라우저가 직접 확인할 방법이 없으므로, 그
+  // 기기들은 이 값을 그대로 믿는다("이 PC" 자신은 실시간 useAgentStatus()를 우선한다).
+  status?: DeviceStatus
 }
 
-// GET /api/v1/devices가 아직 없어(#1) 새로고침 때마다 목록을 다시 불러올 방법이 없다 —
-// 그래서 목업으로 채워두지 않고 빈 채로 시작한다. 이번 세션에서 실제로 페어링한 기기만
-// (§ PairingPanelState) 여기 쌓인다. 그 API가 생기면 이 빈 배열을 초기 조회로 바꾼다.
-const INITIAL_DEVICES: RegisteredDevice[] = []
-
-function todayLabel(): string {
-  const d = new Date()
+function formatDate(iso: string): string {
+  const d = new Date(iso)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -115,9 +111,36 @@ function formatCountdown(totalSeconds: number): string {
 // 화면을 벗어나면 재발급해야 한다 — 그래서 코드가 없으면 폴링 자체를 멈춘다.
 function PcManagement() {
   const agentStatus = useAgentStatus()
-  const [devices, setDevices] = useState<RegisteredDevice[]>(INITIAL_DEVICES)
+  const [devices, setDevices] = useState<RegisteredDevice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [pairing, setPairing] = useState<PairingPanelState>({ phase: 'idle' })
+
+  // 화면을 열 때 부른다(계약서 "지정 PC 관리 화면" 절) — 다른 탭에서 등록한 PC도 여기서 같이
+  // 보여야 하므로 세션 로컬 상태로 들고 있지 않는다.
+  const refreshDevices = async () => {
+    try {
+      const { devices: fetched } = await listDevices()
+      setDevices(
+        fetched.map((d) => ({
+          id: d.deviceId,
+          name: d.name,
+          registeredAt: formatDate(d.registeredAt),
+          status: d.status,
+        })),
+      )
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : '기기 목록을 불러오지 못했어요.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshDevices()
+  }, [])
 
   const removeDevice = (id: string) => setDevices((prev) => prev.filter((d) => d.id !== id))
 
@@ -165,10 +188,7 @@ function PcManagement() {
       try {
         const status = await getPairingStatus(pairingRequestId)
         if (cancelled || status.status !== 'CLAIMED') return
-        setDevices((prev) => [
-          ...prev,
-          { id: status.deviceId, name: `PC ${prev.length + 1}`, registeredAt: todayLabel() },
-        ])
+        await refreshDevices()
         setPairing({ phase: 'idle' })
       } catch {
         // 폴링 중 일시적 네트워크 오류는 다음 주기에 다시 시도한다 — 카운트다운이 만료를 대신 처리한다.
@@ -258,14 +278,29 @@ function PcManagement() {
       )}
 
       <div className="rounded-xl border border-hairline p-4">
+        {loading ? (
+          <p className="text-sm text-muted">불러오는 중...</p>
+        ) : loadError ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted">{loadError}</p>
+            <button
+              type="button"
+              onClick={refreshDevices}
+              className="shrink-0 text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : (
+        <>
         <p className="mb-3 text-sm font-semibold">
           등록현황 {devices.length}/{MAX_DEVICES}
         </p>
 
         <div className="flex flex-col gap-1.5">
           {devices.map((d) => {
-            const isOnline = d.isThisDevice ? agentStatus === 'online' : d.mockAgentOnline === true
-            const statusKnown = d.isThisDevice || d.mockAgentOnline !== undefined
+            const isOnline = d.isThisDevice ? agentStatus === 'online' : d.status !== undefined && d.status !== 'OFFLINE'
+            const statusKnown = d.isThisDevice || d.status !== undefined
 
             return (
             <div key={d.id} className="flex items-center gap-2.5 rounded-lg border border-hairline px-3 py-2">
@@ -336,6 +371,8 @@ function PcManagement() {
             )
           })}
         </div>
+        </>
+        )}
       </div>
 
       {/* slash-agent에 아직 실제 배포판이 없어서, 지금은 릴리스가 올라올 실제 장소로 보낸다 —
