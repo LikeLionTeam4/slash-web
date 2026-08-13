@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Trash2, Loader2 } from 'lucide-react'
+import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Loader2 } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { MicSettingsPopover } from './MicSettingsPopover'
 import {
@@ -14,10 +14,16 @@ import {
 import { parseCommandChain, mockPlaceholderMessage } from '../lib/mockCommands'
 import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
-import { useFileSearch } from '../hooks/fileSearchContext'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { ApiError } from '../lib/apiClient'
-import { createTaskRequest, getTask, isTerminalTaskStatus, type SystemStatusResult, type TaskStatus } from '../lib/tasks'
+import {
+  createTaskRequest,
+  getTask,
+  isTerminalTaskStatus,
+  type FileSearchResult,
+  type SystemStatusResult,
+  type TaskStatus,
+} from '../lib/tasks'
 
 function AddMenuItem({
   icon: Icon,
@@ -67,9 +73,6 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
   )
 }
 
-/** 파일 검색 결과를 접어둘 때 보여줄 개수. */
-const COLLAPSED_FILE_RESULTS = 10
-
 /** 목적격 조사 — 받침이 있으면 '을', 없으면 '를'. ('검색어를 입력' / '파일 이름을 입력') */
 function withObjectParticle(noun: string): string {
   const code = noun.charCodeAt(noun.length - 1)
@@ -93,6 +96,7 @@ const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
   TASK_TYPE_NOT_SUPPORTED: '이 PC가 지원하지 않는 기능이에요.',
   TASK_EXPIRED: '실행 기한이 지났어요.',
   UNRECOGNIZED_COMMAND: '요청을 알아듣지 못했어요.',
+  SEARCH_FOLDER_NOT_FOUND: 'PC의 에이전트에서 검색할 폴더를 추가해주세요.',
   AGENT_REJECTED: 'PC가 이 요청을 받지 않았어요.',
   AGENT_TASK_FAILED: 'PC에서 실행이 끝나지 못했어요.',
   NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
@@ -109,6 +113,12 @@ type StatusTaskState =
   | { phase: 'done'; result: SystemStatusResult }
   | { phase: 'failed'; message: string }
 
+type FileSearchTaskState =
+  | { phase: 'idle' }
+  | { phase: 'running'; status: TaskStatus }
+  | { phase: 'done'; result: FileSearchResult }
+  | { phase: 'failed'; message: string }
+
 const STATUS_POLL_INTERVAL_MS = 2000
 
 export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
@@ -121,8 +131,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const [selectedMicId, setSelectedMicId] = useState<string | null>(null)
   const [holdToRecord, setHoldToRecord] = useState(true)
   const [highlightIndex, setHighlightIndex] = useState(0)
-  const [fileHighlight, setFileHighlight] = useState(0)
-  const [fileListExpanded, setFileListExpanded] = useState(false)
   const [modelView, setModelView] = useState<ModelView>('services')
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
@@ -134,11 +142,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
   const [statusTask, setStatusTask] = useState<StatusTaskState>({ phase: 'idle' })
   const statusPollTimeoutRef = useRef<number | null>(null)
+  const [fileSearchTask, setFileSearchTask] = useState<FileSearchTaskState>({ phase: 'idle' })
+  const fileSearchPollTimeoutRef = useRef<number | null>(null)
+  // 검색 도중 쿼리를 바꿔 새 검색이 시작되면, 그 사이 도착하는 이전 검색의 폴링 응답은 버려야
+  // 한다 — 아니면 방금 친 쿼리 화면에 직전 쿼리의 결과가 덮어써진다.
+  const fileSearchTaskIdRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const fileListRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const fileSearch = useFileSearch()
   const agentStatus = useAgentStatus()
   const navigate = useNavigate()
   const location = useLocation()
@@ -191,12 +202,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         : stepped || !hasText
           ? `${withObjectParticle(nextOperandName!)} 입력하고 Enter를 눌러주세요.`
           : null
-  const fileResults = isFileSearchCommand ? fileSearch.search(commandChain!.query) : []
-  const hasSearchFolders = fileSearch.folders.length > 0 || fileSearch.readOnlyFolders.length > 0
-  // 결과가 많을 수 있으므로 처음에는 위에서 10개만 — 패널이 화면을 다 덮으면 검색어를 고쳐 칠 수가
-  // 없다. 나머지는 '더 보기'로 펼치고, 펼친 목록은 그 안에서 스크롤된다.
-  const visibleFileResults = fileListExpanded ? fileResults : fileResults.slice(0, COLLAPSED_FILE_RESULTS)
-  const hiddenFileCount = fileResults.length - visibleFileResults.length
   const currentServiceLabel = SERVICES.find((s) => s.id === selectedModel.service)?.label ?? ''
   const currentModelLabel =
     MODELS_BY_SERVICE[selectedModel.service].find((m) => m.id === selectedModel.modelId)?.label ?? ''
@@ -206,31 +211,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     : `${currentServiceLabel} · ${currentModelLabel}`
 
   const showModelPicker = commandMode === null && trimmed === '/모델'
-  const showTrash = commandMode === null && trimmed === '/파일/휴지통'
   const showStatusCommand = commandMode === null && trimmed === '/상태'
-  const showSuggestions = !!suggestions && !showModelPicker && !showTrash && !showStatusCommand
-  // 폴더가 하나도 없으면 파일 이름을 다 친 뒤가 아니라 `/파일`에 들어서는 순간 알려준다 —
-  // 검색어를 다 입력하고 나서야 "검색할 데가 없다"고 하는 건 너무 늦다.
-  const needsFolderSetup =
-    fileSearch.supported && !hasSearchFolders && commandMode?.path.length === 1 && commandMode.path[0] === '파일'
-  const showFileSearch =
-    !showSuggestions && !showModelPicker && !showTrash && (isFileSearchCommand || needsFolderSetup)
-  const showModelSearch =
-    !showSuggestions && !showModelPicker && !showTrash && !showFileSearch && isModelSearchCommand
-  // 폴더 안내 패널이 떠 있으면 "파일 이름을 입력하고 Enter" 줄은 겹쳐서 시끄럽기만 하다.
+  const showSuggestions = !!suggestions && !showModelPicker && !showStatusCommand
+  const showFileSearch = !showSuggestions && !showModelPicker && isFileSearchCommand
+  const showModelSearch = !showSuggestions && !showModelPicker && !showFileSearch && isModelSearchCommand
+  // 검색 상태 패널이 떠 있으면 "파일 이름을 입력하고 Enter" 줄은 겹쳐서 시끄럽기만 하다.
   const showCommandModeHint = !!commandModeHint && !showFileSearch
   const showPlaceholderMsg =
-    !showSuggestions &&
-    !showModelPicker &&
-    !showTrash &&
-    !showFileSearch &&
-    !showModelSearch &&
-    !showCommandModeHint &&
-    !!placeholderMsg
+    !showSuggestions && !showModelPicker && !showFileSearch && !showModelSearch && !showCommandModeHint && !!placeholderMsg
   const showDeepLinkHint =
     !showSuggestions &&
     !showModelPicker &&
-    !showTrash &&
     !showFileSearch &&
     !showModelSearch &&
     !showCommandModeHint &&
@@ -238,7 +229,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const showCommandHint =
     !showSuggestions &&
     !showModelPicker &&
-    !showTrash &&
     !showStatusCommand &&
     !showFileSearch &&
     !showModelSearch &&
@@ -250,14 +240,25 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
   useEffect(() => {
     setHighlightIndex(0)
-    setFileHighlight(0)
-    setFileListExpanded(false)
   }, [value])
 
-  // 펼친 목록은 스크롤되므로, 키보드로 고른 줄이 화면 밖에 있으면 따라 들어와야 한다.
+  // 쿼리를 고치면 끝난 검색 결과/에러는 지운다 — 진행 중인 검색은 그대로 두고(중복 요청은
+  // Enter 쪽에서 막는다) 끝난 뒤에야 다음 입력에 반응한다.
   useEffect(() => {
-    fileListRef.current?.querySelector(`[data-file-index="${fileHighlight}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [fileHighlight])
+    setFileSearchTask((prev) => (prev.phase === 'done' || prev.phase === 'failed' ? { phase: 'idle' } : prev))
+  }, [value])
+
+  // 파일 검색 모드를 벗어나면(다른 명령으로 바꾸거나 명령어 자체를 지우면) 진행 중이던 폴링도
+  // 함께 멈춘다 — /상태 쪽의 같은 목적 effect와 동일한 이유.
+  useEffect(() => {
+    if (commandMode?.path[0] === '파일') return
+    if (fileSearchPollTimeoutRef.current !== null) {
+      clearTimeout(fileSearchPollTimeoutRef.current)
+      fileSearchPollTimeoutRef.current = null
+    }
+    fileSearchTaskIdRef.current = null
+    setFileSearchTask({ phase: 'idle' })
+  }, [commandMode])
 
   // Suggestion chips on the home screen set a query in from the outside — the caller passes a new
   // object each time (even for the same value), so this fires even on repeat clicks of one chip.
@@ -293,6 +294,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   useEffect(() => {
     return () => {
       if (statusPollTimeoutRef.current !== null) clearTimeout(statusPollTimeoutRef.current)
+      if (fileSearchPollTimeoutRef.current !== null) clearTimeout(fileSearchPollTimeoutRef.current)
     }
   }, [])
 
@@ -348,11 +350,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     if (showModelPicker) setValue('')
   }
 
-  /** 검색할 폴더는 설정에서 정한다 — 설정 모달은 URL 해시로 열린다(AppShell). */
-  function openFolderSettings() {
-    navigate({ pathname: location.pathname, hash: '#settings/general' })
-  }
-
   // 딥링크 명령(/네이버/지도, /네이버/길찾기)은 결과가 앱 밖 새 탭에서 열린다 — 이슈 #6의 방식 1.
   // window.open은 클릭/Enter 같은 사용자 제스처 안에서 호출해야 팝업 차단을 피할 수 있다.
   function openDeepLink(url: string) {
@@ -365,7 +362,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     getTask(taskId)
       .then((task) => {
         if (task.status === 'SUCCEEDED') {
-          setStatusTask({ phase: 'done', result: task.result! })
+          setStatusTask({ phase: 'done', result: task.result as SystemStatusResult })
           return
         }
         if (task.status === 'FAILED' || task.status === 'EXPIRED') {
@@ -400,6 +397,49 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
   }
 
+  /** /상태와 같은 접수·폴링 패턴 — 검색할 폴더는 프론트가 고르지 않고 서버가 자동으로 고른다
+   *  (frontend-api-contract.md, slash-api PR #18). */
+  function pollFileSearchTask(taskId: string) {
+    getTask(taskId)
+      .then((task) => {
+        if (fileSearchTaskIdRef.current !== taskId) return // 그 사이 새 검색이 시작됨 — 낡은 응답은 버린다.
+        if (task.status === 'SUCCEEDED') {
+          setFileSearchTask({ phase: 'done', result: task.result as FileSearchResult })
+          return
+        }
+        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
+          setFileSearchTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
+          return
+        }
+        setFileSearchTask({ phase: 'running', status: task.status })
+        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(taskId), STATUS_POLL_INTERVAL_MS)
+      })
+      .catch(() => {
+        if (fileSearchTaskIdRef.current !== taskId) return
+        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(taskId), STATUS_POLL_INTERVAL_MS)
+      })
+  }
+
+  async function runFileSearchCommand(query: string) {
+    if (fileSearchTask.phase === 'running') return
+    setFileSearchTask({ phase: 'running', status: 'ANALYZING' })
+    try {
+      const created = await createTaskRequest(`/파일 ${query}`)
+      fileSearchTaskIdRef.current = created.taskId
+      if (isTerminalTaskStatus(created.status)) {
+        pollFileSearchTask(created.taskId)
+      } else {
+        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(created.taskId), STATUS_POLL_INTERVAL_MS)
+        setFileSearchTask({ phase: 'running', status: created.status })
+      }
+    } catch (err) {
+      setFileSearchTask({
+        phase: 'failed',
+        message: err instanceof ApiError ? err.message : '요청을 보내지 못했어요. 잠시 후 다시 시도해주세요.',
+      })
+    }
+  }
+
   function submitCommand() {
     if (commandMode && stepped) {
       // 값을 여러 개 받는 명령은 Enter마다 한 값씩 칩으로 확정한다. 마지막 값까지 모이면
@@ -427,10 +467,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       }
       return
     }
-    // 파일 검색은 결과가 곧 결론이다 — Enter는 명령을 보내는 게 아니라 고른 파일을 연다.
-    if (showFileSearch && fileResults.length > 0) {
-      const file = fileResults[fileHighlight] ?? fileResults[0]
-      fileSearch.openFile(file.folderName, file.path)
+    // 검색 폴더는 서버가 자동으로 고르므로 Enter는 접수만 한다 — 진행 중엔 중복 접수를 막는다.
+    if (showFileSearch) {
+      if (hasText) runFileSearchCommand(trimmed)
       return
     }
     if (showStatusCommand) {
@@ -501,25 +540,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         } else {
           setValue('')
         }
-      }
-      return
-    }
-
-    // 파일 결과 위아래로 옮기기. 명령어 모드 안에서 도는 목록이라 아래 commandMode 처리보다 먼저 본다.
-    if (showFileSearch && fileResults.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      e.preventDefault()
-      const visible = visibleFileResults.length
-      if (e.key === 'ArrowUp') {
-        setFileHighlight((i) => (i - 1 + visible) % visible)
-        return
-      }
-      // 접어둔 마지막 줄에서 한 번 더 내리면 나머지를 펼친다 — 키보드만으로도 11번째에 닿아야 한다.
-      const next = fileHighlight + 1
-      if (next >= visible && hiddenFileCount > 0) {
-        setFileListExpanded(true)
-        setFileHighlight(next)
-      } else {
-        setFileHighlight(next >= visible ? 0 : next)
       }
       return
     }
@@ -926,150 +946,35 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
       {showFileSearch && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface text-left">
-          {!fileSearch.supported ? (
-            <p className="px-4 py-3 text-sm text-muted">
-              이 브라우저는 로컬 폴더 접근을 지원하지 않아요 (Chrome/Edge 권장).
+          {fileSearchTask.phase === 'idle' ? (
+            <p className="px-4 py-3 text-sm text-muted">Enter를 누르면 등록된 PC에서 찾아요.</p>
+          ) : fileSearchTask.phase === 'running' ? (
+            <p className="flex items-center gap-1.5 px-4 py-3 text-sm text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              {TASK_STATUS_LABELS[fileSearchTask.status] ?? '검색하는 중이에요'}
             </p>
-          ) : !hasSearchFolders ? (
-            // 폴더를 여기서 고르게 하면 검색 한 번에 "어디서"와 "무엇을"을 같이 정해야 한다.
-            // 잘 바뀌지 않는 쪽은 설정에 두고, 여기서는 그리로 보내기만 한다.
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <p className="text-sm text-muted">검색할 폴더가 아직 없어요. 설정에서 한 번만 정해두면 돼요.</p>
-              <button
-                type="button"
-                onClick={openFolderSettings}
-                className="shrink-0 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
-              >
-                폴더 설정 열기
-              </button>
-            </div>
-          ) : fileSearch.indexing ? (
-            <p className="px-4 py-3 text-sm text-muted">폴더 색인 중...</p>
-          ) : fileResults.length === 0 ? (
+          ) : fileSearchTask.phase === 'failed' ? (
+            <p className="px-4 py-3 text-sm text-accent-blue">{fileSearchTask.message}</p>
+          ) : fileSearchTask.result.items.length === 0 ? (
             <p className="px-4 py-3 text-sm text-muted">일치하는 파일이 없어요.</p>
           ) : (
             <>
-              {fileSearch.systemFilesSkipped.length > 0 && (
-                <p className="border-b border-hairline px-4 py-1.5 text-xs text-muted">
-                  시스템 파일은 검색에서 제외했어요: {fileSearch.systemFilesSkipped.join(', ')}
-                </p>
-              )}
-              <div ref={fileListRef} className={fileListExpanded ? 'max-h-64 overflow-y-auto' : undefined}>
-                {visibleFileResults.map((f, i) => (
-                  <div
-                    key={`${f.folderName}/${f.path}`}
-                    data-file-index={i}
-                    // 마우스를 올리면 키보드 하이라이트도 같이 옮긴다 — 두 방식이 서로 다른 항목을
-                    // 가리키면 Enter가 어디로 갈지 알 수 없다 (자동완성·모델 피커와 같은 규칙).
-                    onMouseEnter={() => setFileHighlight(i)}
-                    className={`flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
-                      i === fileHighlight ? 'bg-foreground/8' : ''
-                    }`}
-                  >
+              <div className="max-h-64 overflow-y-auto">
+                {fileSearchTask.result.items.map((f) => (
+                  <div key={f.fileRef} className="flex items-center gap-2.5 px-4 py-2 text-sm">
                     <FileText size={16} className="shrink-0 text-muted" />
-                    <button
-                      type="button"
-                      onClick={() => fileSearch.openFile(f.folderName, f.path)}
-                      title="파일 열기"
-                      className="min-w-0 flex-1 truncate text-left text-foreground transition-colors hover:text-accent-blue"
-                    >
-                      {f.name}
-                    </button>
-                    <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">
-                      {f.folderName}/{f.path}
-                    </span>
-                    {!f.readOnly && (
-                      <button
-                        type="button"
-                        aria-label={`${f.name} 휴지통으로 이동`}
-                        title="휴지통으로 이동"
-                        onClick={() => {
-                          if (window.confirm(`'${f.name}'을(를) 휴지통으로 옮길까요? '/파일/휴지통'에서 다시 복원할 수 있어요.`)) {
-                            fileSearch.deleteFile(f.folderName, f.path)
-                          }
-                        }}
-                        className="shrink-0 text-muted transition-colors hover:text-accent-blue"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
+                    <span className="min-w-0 flex-1 truncate text-foreground">{f.name}</span>
+                    <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">{f.relativePath}</span>
                   </div>
                 ))}
               </div>
-              {hiddenFileCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setFileListExpanded(true)}
-                  className="flex w-full items-center justify-center gap-1 border-t border-hairline px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-foreground/6 hover:text-foreground"
-                >
-                  <ChevronDown size={14} />
-                  {hiddenFileCount}개 더 보기
-                </button>
-              ) : (
-                <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">↑ ↓ 로 고르고 Enter로 열어요</p>
+              {fileSearchTask.result.truncated && (
+                <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">
+                  결과가 더 있어요 — 검색어를 좁혀보세요.
+                </p>
               )}
             </>
           )}
-          {fileSearch.error && (
-            <p className="border-t border-hairline px-4 py-2 text-xs text-accent-blue">{fileSearch.error}</p>
-          )}
-        </div>
-      )}
-
-      {showTrash && (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-surface text-left">
-          <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2">
-            <p className="text-xs text-muted">
-              {fileSearch.folders.length > 0
-                ? `${fileSearch.folders.map((f) => f.name).join(', ')} 폴더의 휴지통`
-                : '휴지통'}
-            </p>
-            {fileSearch.trashedFiles.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm('휴지통을 비우면 전부 영구적으로 삭제돼요. 복구할 수 없어요. 계속할까요?')) {
-                    fileSearch.emptyTrash()
-                  }
-                }}
-                className="shrink-0 text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
-              >
-                휴지통 비우기
-              </button>
-            )}
-          </div>
-          {fileSearch.trashedFiles.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-muted">휴지통이 비어있어요.</p>
-          ) : (
-            fileSearch.trashedFiles.map((t) => (
-              <div key={t.id} className="flex items-center gap-2.5 px-4 py-2 text-sm">
-                <FileText size={16} className="shrink-0 text-muted" />
-                <span className="flex-1 truncate text-foreground">{t.name}</span>
-                <span className="max-w-[25%] shrink-0 truncate text-xs text-muted">
-                  {t.folderName}/{t.originalPath}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => fileSearch.restoreFile(t)}
-                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-foreground/10"
-                >
-                  복원
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`'${t.name}'을(를) 영구적으로 삭제해요. 복구할 수 없어요. 계속할까요?`)) {
-                      fileSearch.permanentlyDeleteFile(t)
-                    }
-                  }}
-                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
-                >
-                  완전 삭제
-                </button>
-              </div>
-            ))
-          )}
-          {fileSearch.error && <p className="px-4 py-2 text-xs text-accent-blue">{fileSearch.error}</p>}
         </div>
       )}
 

@@ -6,7 +6,6 @@ import { SettingsDialog } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { useAppearance } from '../hooks/appearanceContext'
-import { FileSearchProvider } from '../hooks/fileSearchContext'
 import { AgentStatusProvider } from '../hooks/agentStatusContext'
 import { CurrentUserProvider } from '../hooks/currentUserContext'
 import { DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId, type SettingsCategoryId } from '../lib/settingsCategory'
@@ -48,8 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const closeShortcuts = () => navigate({ pathname: location.pathname }, { replace: true })
 
   return (
-    <FileSearchProvider>
-      <AgentStatusProvider>
+    <AgentStatusProvider>
       <CurrentUserProvider>
       <div className="flex h-screen font-sans text-foreground">
         <Sidebar
@@ -85,7 +83,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
       </div>
       </CurrentUserProvider>
-      </AgentStatusProvider>
-    </FileSearchProvider>
+    </AgentStatusProvider>
   )
 }

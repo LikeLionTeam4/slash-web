@@ -1,20 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  X,
-  Monitor,
-  Sun,
-  Moon,
-  ChevronDown,
-  FolderClosed,
-  Plus,
-  Pencil,
-  Download,
-  Info,
-  Loader2,
-} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X, Monitor, Sun, Moon, ChevronDown, Plus, Pencil, Download, Info, Loader2 } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 import type { FontSize } from '../hooks/useFontSize'
-import { useFileSearch } from '../hooks/fileSearchContext'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { getClientInfo } from '../lib/clientInfo'
 import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
@@ -397,115 +384,25 @@ function PcManagement() {
 }
 
 /**
- * `/파일` 검색이 뒤질 폴더를 미리 정해두는 곳. 검색할 때마다 폴더를 고르게 하면 검색 한 번에
- * 두 가지 결정(어디서 · 무엇을)을 하게 되므로, 잘 안 바뀌는 쪽인 "어디서"를 설정으로 옮겼다.
+ * `/파일` 검색 대상 폴더 안내. 폴더는 이 화면에서 고르지 않는다 — PC에 설치한 로컬 에이전트가
+ * 등록한 폴더 중 서버가 검색할 때마다 자동으로 고른다(frontend-api-contract.md, slash-api
+ * PR #18). 여기서는 그 사실과 "지정 PC 관리"로 가는 길만 안내한다.
  */
-function SearchFolders() {
-  const fileSearch = useFileSearch()
-  const readOnlyInputRef = useRef<HTMLInputElement>(null)
-  const hasFolders = fileSearch.folders.length > 0 || fileSearch.readOnlyFolders.length > 0
-
+function SearchFolders({ onOpenPcManagement }: { onOpenPcManagement: () => void }) {
   return (
     <>
-      {/* webkitdirectory는 JSX 타입에 없어 ref로 직접 건다. showDirectoryPicker와 달리 이 옛 API에는
-          "민감한 폴더" 차단 목록이 없어서, 다운로드 같은 최상위 폴더에 닿는 유일한 방법이다(읽기 전용). */}
-      <input
-        ref={(el) => {
-          readOnlyInputRef.current = el
-          el?.setAttribute('webkitdirectory', '')
-        }}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files) fileSearch.addReadOnlyFolder(e.target.files)
-          e.target.value = ''
-        }}
-      />
-
       <h3 className="mb-1 text-sm font-semibold">파일 검색 폴더</h3>
       <p className="mb-3 text-xs text-muted">
-        여기에 추가한 폴더에서만 <code className="text-foreground">/파일</code> 검색이 이뤄져요.
+        <code className="text-foreground">/파일</code> 검색 대상 폴더는 여기서 정하지 않아요. PC에 설치한
+        로컬 에이전트에서 등록한 폴더 중 서버가 검색할 때마다 자동으로 골라요.
       </p>
-
-      {!fileSearch.supported ? (
-        <p className="text-sm text-muted">이 브라우저는 로컬 폴더 접근을 지원하지 않아요 (Chrome/Edge 권장).</p>
-      ) : (
-        <>
-          {hasFolders && (
-            <div className="mb-3 flex flex-col gap-1.5">
-              {fileSearch.folders.map((f) => (
-                <div
-                  key={f.name}
-                  className="flex items-center gap-2 rounded-lg border border-hairline px-3 py-2 text-sm"
-                >
-                  <FolderClosed size={15} className="shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate text-foreground">{f.name}</span>
-                  {!f.connected && (
-                    <button
-                      type="button"
-                      onClick={() => fileSearch.reconnectFolder(f.name)}
-                      className="shrink-0 text-xs font-medium text-accent-blue transition-colors hover:brightness-110"
-                    >
-                      재연결
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={`${f.name} 제거`}
-                    onClick={() => fileSearch.removeFolder(f.name)}
-                    className="shrink-0 text-muted transition-colors hover:text-foreground"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-              {fileSearch.readOnlyFolders.map((f) => (
-                <div
-                  key={f.name}
-                  title="읽기 전용 — 삭제할 수 없고, 새로고침하면 다시 추가해야 해요"
-                  className="flex items-center gap-2 rounded-lg border border-hairline px-3 py-2 text-sm"
-                >
-                  <FolderClosed size={15} className="shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate text-muted">{f.name} (읽기 전용)</span>
-                  <button
-                    type="button"
-                    aria-label={`${f.name} 제거`}
-                    onClick={() => fileSearch.removeReadOnlyFolder(f.name)}
-                    className="shrink-0 text-muted transition-colors hover:text-foreground"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={fileSearch.addFolder}
-              className="rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
-            >
-              폴더 추가
-            </button>
-            <button
-              type="button"
-              onClick={() => readOnlyInputRef.current?.click()}
-              title="다운로드처럼 최상위 폴더 자체는 읽기 전용으로만 추가할 수 있어요"
-              className="text-xs font-medium text-muted transition-colors hover:text-accent-blue"
-            >
-              최상위 폴더 (읽기 전용)
-            </button>
-          </div>
-
-          <p className="mt-2 text-xs text-muted">
-            홈 폴더·바탕화면·다운로드 같은 최상위 폴더는 브라우저가 막아요 — 그 안의 구체적인 하위 폴더들을 여러 개
-            추가해보세요.
-          </p>
-          {fileSearch.error && <p className="mt-1 text-xs text-accent-blue">{fileSearch.error}</p>}
-        </>
-      )}
+      <button
+        type="button"
+        onClick={onOpenPcManagement}
+        className="rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
+      >
+        지정 PC 관리로 이동
+      </button>
     </>
   )
 }
@@ -655,7 +552,7 @@ export function SettingsDialog({
             </div>
           ) : active === 'files' ? (
             <div className="flex flex-col gap-6">
-              <SearchFolders />
+              <SearchFolders onOpenPcManagement={() => onActiveChange('plugins')} />
             </div>
           ) : active === 'plugins' ? (
             <div className="flex flex-col gap-6">
