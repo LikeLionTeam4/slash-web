@@ -62,6 +62,10 @@ export interface ApiRequestOptions {
   ifMatch?: string
   /** §6의 공개 경로(health, agent pair 등) 호출 시 — Authorization 헤더를 아예 안 붙인다. */
   skipAuth?: boolean
+  /** 백그라운드 폴링용 — AUTH_REQUIRED를 받아도 signinSilent/signinRedirect로 이어가지 않고
+   *  그냥 실패로 던진다. 세션이 잠깐 꼬였다고 사용자가 보고 있던 화면에서 로그인 페이지로
+   *  강제 이동시키면 안 된다(그것도 30초마다 반복되면 리다이렉트 루프가 된다). */
+  silent?: boolean
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -77,7 +81,7 @@ export function newIdempotencyKey(): string {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}, _retried = false): Promise<T> {
-  const { method = 'GET', body, headers = {}, idempotencyKey, ifMatch, skipAuth } = options
+  const { method = 'GET', body, headers = {}, idempotencyKey, ifMatch, skipAuth, silent } = options
 
   const reqHeaders: Record<string, string> = { ...headers }
   if (body !== undefined) reqHeaders['Content-Type'] = 'application/json; charset=utf-8'
@@ -112,7 +116,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const requestId = json?.meta?.requestId
 
   // 계약서 §5: 갱신 → 원요청 1회만 재시도 → 또 실패하면 로그인 화면으로.
-  if (errCode === 'AUTH_REQUIRED' && !skipAuth) {
+  if (errCode === 'AUTH_REQUIRED' && !skipAuth && !silent) {
     if (!_retried) {
       try {
         await userManager.signinSilent()
