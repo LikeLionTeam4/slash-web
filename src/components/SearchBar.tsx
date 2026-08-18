@@ -124,6 +124,7 @@ type FileSearchTaskState =
 type FreeTextTaskState =
   | { phase: 'idle' }
   | { phase: 'running'; status: TaskStatus }
+  | { phase: 'needsClarification'; question: string | null }
   | { phase: 'done'; result: unknown }
   | { phase: 'failed'; message: string }
 
@@ -481,6 +482,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         }
         if (task.status === 'FAILED' || task.status === 'EXPIRED') {
           setFreeTextTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
+          return
+        }
+        if (task.status === 'NEEDS_CLARIFICATION') {
+          // 백엔드는 correlationId로 같은 태스크를 이어가지 않는다 — 답변도 새 text로 새 요청을
+          // 보내는 구조라, 이 태스크는 더 안 바뀐다. 폴링을 멈추고 질문만 보여준다.
+          setFreeTextTask({ phase: 'needsClarification', question: task.question ?? null })
           return
         }
         setFreeTextTask({ phase: 'running', status: task.status })
@@ -1100,6 +1107,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               <Loader2 size={14} className="animate-spin" />
               {TASK_STATUS_LABELS[freeTextTask.status] ?? '처리하는 중이에요'}
             </p>
+          )}
+          {freeTextTask.phase === 'needsClarification' && (
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-foreground">{freeTextTask.question ?? '추가 정보가 필요해요.'}</p>
+              <p className="text-xs text-muted">위 질문에 맞게 입력을 수정하고 Enter를 눌러주세요.</p>
+            </div>
           )}
           {freeTextTask.phase === 'failed' && <p className="text-sm text-accent-blue">{freeTextTask.message}</p>}
           {freeTextTask.phase === 'done' && (
