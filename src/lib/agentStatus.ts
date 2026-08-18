@@ -7,7 +7,9 @@ import { listDevices } from './devices'
 
 export async function checkAgentStatus(): Promise<boolean> {
   try {
-    const { devices } = await listDevices()
+    // silent: true — 30초마다 도는 백그라운드 폴링이다. 세션이 만료돼 있어도 여기서
+    // signinRedirect()로 로그인 화면으로 튕기면 안 된다(계속 반복되면 리다이렉트 루프가 된다).
+    const { devices } = await listDevices({ silent: true })
     return devices.some((d) => d.status !== 'OFFLINE')
   } catch {
     return false
