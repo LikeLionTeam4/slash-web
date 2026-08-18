@@ -1,13 +1,14 @@
-// 로컬 에이전트(slash-agent)가 이 PC에서 응답하는지 확인한다. slash-agent 레포는 아직 README만
-// 있는 빈 상태라 포트/엔드포인트가 정식으로 정해지지 않았다 — 아래 값은 확정 전 임시값이니,
-// 실제 스펙이 나오면 반드시 맞춰 바꿔야 한다.
-const AGENT_HEALTH_URL = 'http://127.0.0.1:47285/health'
-const TIMEOUT_MS = 1500
+// 로컬 에이전트가 응답하는지는 브라우저가 직접 확인할 방법이 없다 — slash-agent(slash-pc-runner)는
+// slash-api와 자기만의 WSS(/ws/agent)로만 붙고, 브라우저를 향한 로컬 포트는 열지 않는다
+// (slash-agent README "메시지 프로토콜" 절). slash-api가 이미 하트비트로 알고 있는 값을
+// GET /api/v1/devices의 status로 그대로 받아써야 한다 — frontend-api-contract.md
+// "status로 연결 여부 판단하기": READY/ONLINE/BUSY만 연결됨으로 본다.
+import { listDevices } from './devices'
 
 export async function checkAgentStatus(): Promise<boolean> {
   try {
-    const res = await fetch(AGENT_HEALTH_URL, { signal: AbortSignal.timeout(TIMEOUT_MS) })
-    return res.ok
+    const { devices } = await listDevices()
+    return devices.some((d) => d.status !== 'OFFLINE')
   } catch {
     return false
   }
