@@ -35,22 +35,18 @@ export interface SystemStatusResult {
   collectedAt: string
 }
 
-// slash-api 이슈 #25에서 합의된 형태 — searchFolderId는 사람이 읽을 표시 이름이 아직 없어서
-// (같은 이슈에 후속으로 남김) 화면에 폴더 이름으로 보여주는 용도로는 못 쓴다. fileRef로 열기/삭제
-// 같은 후속 액션을 가리킬 수 있게 설계돼 있지만 그런 액션 자체가 계약에 아직 없어 이번엔 목록
-// 표시까지만 쓴다.
+// slash-api 이슈 #25에서 실측된 형태 — Agent(slash-python-agent/file_index.py)가 이 네 필드만
+// 보내고, 서버는 결과를 가공하지 않고 그대로 전달한다. fileRef·extension·searchFolderId·query는
+// 계약에 없다(searchFolderId·query는 result가 아니라 task.parameters에 있다) — 열기/삭제 같은
+// 후속 액션은 이슈 #25 2번 항목으로 아직 별도 설계 중.
 export interface FileSearchResultItem {
-  fileRef: string
   name: string
   relativePath: string
-  extension: string
   sizeBytes: number
   modifiedAt: string
 }
 
 export interface FileSearchResult {
-  searchFolderId: string
-  query: string
   items: FileSearchResultItem[]
   returnedCount: number
   truncated: boolean
