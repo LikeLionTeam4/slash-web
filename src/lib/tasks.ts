@@ -52,11 +52,31 @@ export interface FileSearchResult {
   truncated: boolean
 }
 
+// slash-infra 이슈 #42 검증 중 실측된 형태(slash-api PR #43 `WEATHER_LOOKUP`).
+export interface WeatherLookupResult {
+  location: string
+  region: string
+  country: string
+  temperature: number
+  apparentTemperature: number
+  humidity: number
+  windSpeed: number
+  precipitation: number
+  description: string
+  observedAt: string
+}
+
+// slash-infra 이슈 #42 검증 중 실측된 형태(slash-api PR #42 `TEXT_SUMMARY`, slash-llm 연동).
+export interface TextSummaryResult {
+  summary: string
+  model: string
+}
+
 export interface TaskDetail {
   taskId: string
   status: TaskStatus
   taskType: string | null
-  result: SystemStatusResult | FileSearchResult | null
+  result: SystemStatusResult | FileSearchResult | WeatherLookupResult | TextSummaryResult | null
   errorCode: string | null
   // NEEDS_CLARIFICATION일 때만 채워진다 — slash-api TaskDetailResponse의 question/correlationId
   // 그대로다. correlationId는 지금은 화면에서 쓰지 않지만(백엔드가 이어가는 대화가 아니라 새
