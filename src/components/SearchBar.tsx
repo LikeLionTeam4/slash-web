@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { Mic, AudioLines, Paperclip, Camera, Plus, ArrowUp, X, FileText, ChevronDown, Loader2 } from 'lucide-react'
+import {
+  Mic,
+  AudioLines,
+  Paperclip,
+  Camera,
+  Plus,
+  ArrowUp,
+  X,
+  FileText,
+  ChevronDown,
+  Loader2,
+  Droplets,
+  Wind,
+} from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { MicSettingsPopover } from './MicSettingsPopover'
 import {
@@ -23,6 +36,8 @@ import {
   type FileSearchResult,
   type SystemStatusResult,
   type TaskStatus,
+  type TextSummaryResult,
+  type WeatherLookupResult,
 } from '../lib/tasks'
 
 function AddMenuItem({
@@ -73,6 +88,44 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
   )
 }
 
+/** WEATHER_LOOKUP 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
+function WeatherResultCard({ result }: { result: WeatherLookupResult }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted">{result.region}</p>
+          <p className="text-2xl font-semibold text-foreground">{Math.round(result.temperature)}°</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-foreground">{result.description}</p>
+          <p className="text-xs text-muted">체감 {Math.round(result.apparentTemperature)}°</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 border-t border-hairline pt-3 text-xs text-muted">
+        <span className="flex items-center gap-1.5">
+          <Droplets size={14} />
+          습도 {result.humidity}%
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Wind size={14} />
+          풍속 {result.windSpeed}m/s
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** TEXT_SUMMARY 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
+function TextSummaryResultCard({ result }: { result: TextSummaryResult }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="whitespace-pre-wrap text-sm text-foreground">{result.summary}</p>
+      <p className="text-xs text-muted">{result.model}이(가) 요약했어요.</p>
+    </div>
+  )
+}
+
 /** 목적격 조사 — 받침이 있으면 '을', 없으면 '를'. ('검색어를 입력' / '파일 이름을 입력') */
 function withObjectParticle(noun: string): string {
   const code = noun.charCodeAt(noun.length - 1)
@@ -119,16 +172,19 @@ type FileSearchTaskState =
   | { phase: 'done'; result: FileSearchResult }
   | { phase: 'failed'; message: string }
 
-// 자유 텍스트는 /상태·/파일과 달리 taskType을 NLU가 그때그때 정하므로(WEATHER_LOOKUP,
-// TEXT_SUMMARY 등) result 모양을 미리 알 수 없다 — 그대로 들고 있다가 화면에서 원본을 보여준다.
+// 자유 텍스트는 /상태·/파일과 달리 taskType을 NLU가 그때그때 정한다(WEATHER_LOOKUP,
+// TEXT_SUMMARY 등) — taskType과 함께 들고 있다가 화면에서 그 타입에 맞는 카드로 렌더링한다.
+// 알려진 타입이 아니면(예: FILE_SEARCH가 자유입력으로 잘못 분류된 경우) raw JSON으로 폴백한다.
 type FreeTextTaskState =
   | { phase: 'idle' }
   | { phase: 'running'; status: TaskStatus }
   | { phase: 'needsClarification'; question: string | null }
-  | { phase: 'done'; result: unknown }
+  | { phase: 'done'; taskType: string | null; result: unknown }
   | { phase: 'failed'; message: string }
 
 const STATUS_POLL_INTERVAL_MS = 2000
+// 입력창이 가로로 무한히 늘어나지 않도록 세로 auto-resize의 상한 — 대략 8줄.
+const TEXTAREA_MAX_HEIGHT_PX = 192
 
 export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
   const [value, setValue] = useState('')
@@ -161,7 +217,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // 파일 검색과 같은 이유 — 편집 중 새로 제출하면 그 사이 도착하는 이전 제출의 폴링 응답은 버린다.
   const freeTextTaskIdRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const textInputRef = useRef<HTMLInputElement>(null)
+  const textInputRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const agentStatus = useAgentStatus()
   const navigate = useNavigate()
@@ -253,6 +309,15 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
   useEffect(() => {
     setHighlightIndex(0)
+  }, [value])
+
+  // 입력창을 가로로 무한히 늘리는 대신 세로로 늘어나게 한다 — 높이를 일단 초기화해야
+  // 줄어드는 방향(긴 문장을 지웠을 때)도 scrollHeight가 정확히 다시 계산된다.
+  useEffect(() => {
+    const el = textInputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`
   }, [value])
 
   // 쿼리를 고치면 끝난 검색 결과/에러는 지운다 — 진행 중인 검색은 그대로 두고(중복 요청은
@@ -477,7 +542,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       .then((task) => {
         if (freeTextTaskIdRef.current !== taskId) return
         if (task.status === 'SUCCEEDED') {
-          setFreeTextTask({ phase: 'done', result: task.result })
+          setFreeTextTask({ phase: 'done', taskType: task.taskType, result: task.result })
           return
         }
         if (task.status === 'FAILED' || task.status === 'EXPIRED') {
@@ -568,7 +633,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
   }
 
-  function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleInputKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // 미뤄둔 Enter는 그 키를 뗄 때까지만 유효하다. 조합을 확정하는 Enter의 keyup은 IME가 삼켜서
     // 아예 오지 않을 수 있는데, 그러면 깃발이 계속 남아 있다가 그다음 Enter의 keyup이 그걸 주워
     // 동작을 한 번 더 실행한다 — keydown에서 한 번, keyup에서 또 한 번. `/모델`에서 서비스로
@@ -663,7 +728,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   }
 
   /** 조합 확정에 먹힌 Enter를 여기서 이어받는다 — 조합이 끝난 값 기준으로 한 번만 실행된다. */
-  function handleInputKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleInputKeyUp(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key !== 'Enter' || !pendingEnterRef.current) return
     pendingEnterRef.current = false
     e.preventDefault()
@@ -793,7 +858,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               ))}
             </div>
           )}
-          <div className="flex w-full items-center gap-3 px-4 py-3.5">
+          <div className="flex w-full items-end gap-3 px-4 py-3.5">
             <span
               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
                 isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/8 text-foreground'
@@ -802,7 +867,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               /
             </span>
             {commandMode && (
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1.5 pb-1">
                 <span className="rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
                   {commandMode.path.join('/')}
                 </span>
@@ -820,9 +885,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                 ))}
               </div>
             )}
-            <input
+            <textarea
               ref={textInputRef}
               value={value}
+              rows={1}
               onChange={(e) => handleValueChange(e.target.value)}
               onKeyDown={handleInputKeyDown}
               onKeyUp={handleInputKeyUp}
@@ -844,7 +910,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                       : ''
                     : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
               }
-              className="min-w-0 flex-1 bg-transparent text-control font-medium text-foreground placeholder:text-muted focus:outline-none"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-control font-medium leading-6 text-foreground placeholder:text-muted focus:outline-none"
             />
             <div className="group relative flex shrink-0 items-center">
               <Tooltip label="마이크 설정">
@@ -1115,13 +1181,19 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             </div>
           )}
           {freeTextTask.phase === 'failed' && <p className="text-sm text-accent-blue">{freeTextTask.message}</p>}
-          {freeTextTask.phase === 'done' && (
-            // taskType을 NLU가 그때그때 정해서 result 모양이 제각각이다 — 전용 카드 렌더링은
-            // /chat/:id 쪽 몫이고(DESIGN.md §4 Chat detail), 여기서는 원본을 그대로 보여준다.
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
-              {JSON.stringify(freeTextTask.result, null, 2)}
-            </pre>
-          )}
+          {freeTextTask.phase === 'done' &&
+            (freeTextTask.taskType === 'WEATHER_LOOKUP' ? (
+              <WeatherResultCard result={freeTextTask.result as WeatherLookupResult} />
+            ) : freeTextTask.taskType === 'TEXT_SUMMARY' ? (
+              <TextSummaryResultCard result={freeTextTask.result as TextSummaryResult} />
+            ) : (
+              // 이슈 #34: /chat 스레드로 옮기는 대신 지금은 인라인에서 처리한다. 여기 오는 건
+              // 아직 전용 카드가 없는 taskType(자유입력이 FILE_SEARCH로 오분류된 경우 등)뿐이라
+              // raw JSON을 폴백으로 보여준다 — slash-infra 이슈 #42/슬래시-nlu 오분류 참고.
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
+                {JSON.stringify(freeTextTask.result, null, 2)}
+              </pre>
+            ))}
         </div>
       )}
 
