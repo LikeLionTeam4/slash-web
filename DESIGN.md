@@ -216,7 +216,7 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
 **Chat detail (`/chat/:id`)**
 - Header row (title + 공유) → alternating message column → the same `SearchBar`, sticky at the bottom. The title is the conversation's own one-liner; for a command conversation that line *is* the command (`/파일 견적서`), the same string the history rows show.
 - User messages are right-aligned bubbles on `surface`; assistant messages are bare text in the column with no bubble, so the answer reads as the page's content rather than as a reply card. A command conversation puts the command in the same `accent-blue` pill the search bar uses, above the value — the split between command and value survives into the transcript instead of being flattened back into one string.
-- **An answer is not always prose.** The assistant block carries an optional typed payload rendered under the text, one of: `web-results` (bordered cards, domain + title + snippet), `file-results` (rows with a file icon and path), `route-steps` (a bordered list with an `accent-blue` summary line on top — for 길찾기, where order is the meaning), `code` (a `pre` on `surface`, horizontally scrollable), `download` (a file card with a 내려받기 button). Add a payload type when a real answer shape needs one; don't dress prose up as a card.
+- **An answer is not always prose.** The assistant block carries an optional typed payload rendered under the text, one of: `web-results` (bordered cards, domain + title + snippet), `file-results` (rows with a file icon and path), `route-steps` (a bordered list with an `accent-blue` summary line on top — for 길찾기, where order is the meaning), `code` (a `pre` on `surface`, horizontally scrollable), `download` (a file card with a 내려받기 button). Add a payload type when a real answer shape needs one; don't dress prose up as a card. Conversely, don't dress a *value* up as a card either without a lead-in sentence — see §10 "결과 응답 스타일" for how task results (weather, and eventually LLM answers) should read like a spoken answer first, with the structured payload as supporting detail underneath.
 - Downloads are real: the mock file's text content becomes a Blob and downloads under its own name, so a `.csv` is genuine CSV. Mock data should not hand out a file that isn't what its extension claims.
 - Mock conversations live in `src/features/chat/mockThreads.ts` and are the **single source for the history/최근/dashboard lists** — those lists are derived from the threads, so every row opens a conversation that exists. Five threads cover the cases worth showing (3 command / 2 free-text) rather than a longer list of rows that lead nowhere. An unknown `:id` gets a plain "이 대화를 찾을 수 없어요" with a way back to /new.
 
@@ -276,6 +276,25 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 
 ### Don't
 - Don't pad reassurance copy ("안전한 검색" / "개인정보는 안전하게") with vague marketing language — keep it as short and concrete as the reference.
+
+### 결과 응답 스타일 (Task Result Voice, 2026-08-20)
+
+구조화된 값(온도·습도·풍속 같은 필드)을 라벨:값 나열로만 보여주면 사람이 답하는 느낌이 안 난다.
+지금 `WEATHER_LOOKUP`에 적용한 패턴을 **모든 task 결과·LLM 답변이 따라야 할 기본형**으로 정한다:
+
+1. **자연어 한두 문장이 먼저 온다.** 값을 그대로 읽는 게 아니라 사람이 그 값들을 보고 대답하듯
+   합쳐서 말한다 — "서울은 지금 22°, 맑음이에요. 체감은 21°이고, 습도는 60%, 바람은 초속 3m로
+   불고 있어요." 처럼. 조사(은/는, 이에요/예요 등)는 하드코딩하지 않고 마지막 글자 받침으로
+   계산한다(`withTopicParticle`/`withCopula`, `SearchBar.tsx` — 기존 `withObjectParticle`과 같은
+   방식). 값 하나하나를 항상 다 말할 필요는 없다 — 강수량처럼 0이면 언급하지 않는 식으로,
+   의미 있을 때만 문장에 넣는다.
+2. **구조화된 값은 그 문장 아래에 그대로 남긴다.** 문장이 구조화된 표시를 대체하지 않는다 —
+   훑어보기용 숫자·배지·표는 계속 필요하다. §4의 "An answer is not always prose" 원칙과 같은
+   방향이다: 문장은 답의 앞머리, 구조화된 payload는 그 답의 근거/디테일.
+3. **이 순서(문장 → 구조화된 상세)는 taskType에 상관없이 같다.** 지금은 날씨 하나뿐이지만,
+   앞으로 붙는 `TEXT_SUMMARY`나 다른 taskType의 결과 카드, 그리고 이후 자유입력이 실제 LLM
+   답변으로 넘어갈 때도 같은 틀을 쓴다 — 톤은 §10 본문의 규칙(짧고 직접적, 해요체, 기술/비기술
+   사용자 모두에게 친절)을 그대로 따른다.
 
 ## 11. Brand Narrative
 
@@ -347,6 +366,8 @@ Treat this section as a starting default, not verified brand motion.
 **Revised again:** 2026-08-20 — three related fixes/changes to the search bar, all triggered by trying to give `/날씨` a real submit path (이슈 #39). (1) **Enter vs Shift+Enter**: the textarea (added 2026-08-19) exposed a latent bug — the IME-composing Enter branch (§4 IME-safe Enter) deferred to keyup without calling `preventDefault()` on keydown, which was harmless on the old `<input>` but let a real newline slip in on `<textarea>` whenever a Korean slash command's last syllable was still composing when Enter confirmed it (e.g. "/날씨"). Fixed by preventing default in that branch too, and Shift+Enter was added as an explicit escape hatch (checked first, before the composing branch) so multi-line free text/command values are still possible — this repo settled on the chat-app convention (Enter submits, Shift+Enter inserts a newline) over a Cmd/Ctrl+Enter scheme, since it needs no per-OS modifier and matches "the input's default action is submit." (2) **Two-row layout**: the search bar's controls (mic-settings, mic, submit/voice, `+`) used to share one `items-end` row with the growing textarea, so a Shift+Enter'd multi-line body dragged the whole toolbar down with it — bottom-anchored but visibly sinking as content grew. Split into a top row (`/`-badge-free now — see next point — path/operand chips + textarea, grows freely) and a fixed-height bottom toolbar row, mirroring Claude Code's composer (content above, chrome pinned below). (3) **`/` badge moved to the toolbar row**: with two rows, the idle `/` badge (§2/§4, mode-colored) no longer had a natural home in the content row — sitting alone above an otherwise-empty textarea on first load read as stranded. It moved to the toolbar row's left edge, the same slot Claude Code's own mode-toggle pill occupies, since it's chrome (a mode indicator) rather than content — unlike the command-path pill (`날씨`) and operand chips, which stayed in the top row because they *are* the content being typed. Separately, `/날씨` (and any future single-operand command with no deep link and no dedicated panel like `/파일`) now submits for real: Enter/click reuses the exact free-text request path (`POST /api/v1/requests` with `text: "/명령어 값"`) instead of the old "아직 준비 중이에요" mock placeholder — `isGenericCommand` in `SearchBar.tsx` is the guard, and it also had to widen the free-text-task reset effect and result-rendering condition (both were keyed only on `isFreeText`, which is false while a command pill is active) so the borrowed request's polling/result card doesn't get wiped by the very effect meant to clean up free text. A brief scale/brightness "press" flash was added to the submit button (`keyboardPressed` state, ~150ms) so Enter-triggered submissions read as a button press even though no click occurred, across every real Enter-triggered action (deep link, `/파일`, `/상태`, free text, and this new generic path) — not just the new one.
 
 **Revised again:** 2026-08-20 (later same day) — dropped the full-pill idle shape (§2/§4/§5): with the two-row toolbar split and command-path chips landed earlier this session, an empty/idle search bar could still grow taller than a single line (chips, multi-line Shift+Enter content) while keeping the full-pill radius, and the exaggerated curvature at that height read as cluttered rather than calm. The search bar now stays the 28px rounded rectangle (previously the attachments-only shape) at every state; chips and the submit button keep their own full-pill shape, unaffected.
+
+**Revised again:** 2026-08-20 (later same day) — `WeatherResultCard`(`SearchBar.tsx`)가 라벨:값 나열만 보여주던 걸, 값을 자연어 한 문장으로 합쳐 먼저 보여주도록 바꿨다("서울은 지금 22°, 맑음이에요. 체감은 21°이고, 습도는 60%..."). 조사는 `withObjectParticle`과 같은 방식으로 계산하는 `withTopicParticle`/`withCopula`를 새로 추가해 하드코딩하지 않았다. 이 패턴을 앞으로의 모든 task 결과·LLM 답변이 따라야 할 기본형으로 §10에 "결과 응답 스타일" 절로 문서화했다 — 지금은 날씨 하나뿐이지만 `TEXT_SUMMARY`와 이후 자유입력 LLM 답변에도 같은 틀(문장이 먼저, 구조화된 상세는 그 아래)을 쓸 계획.
 
 **Superseded bootstrap material:** this project was first bootstrapped from a claude-style test reference, then pivoted to Slash's own brand on 2026-07-29. Those two files (`DESIGN_DEPRECATED.md`, `DESIGN_DEPRECATED_claude.md`) were deleted on 2026-07-30 — a competing palette sitting in the repo root was more likely to be grepped by mistake than to be useful. They remain in git history at commit `0ea4bd1` if ever needed.
 

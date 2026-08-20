@@ -89,10 +89,34 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
 }
 
 /** WEATHER_LOOKUP 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
+/** 문장 안 서술어 자리에 받침 유무로 "이에요"/"예요"를 고른다 (예: "맑음"→"맑음이에요", "비"→"비예요"). */
+function withCopula(noun: string): string {
+  const code = noun.charCodeAt(noun.length - 1)
+  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
+  return `${noun}${hasFinalConsonant ? '이에요' : '예요'}`
+}
+
+/** 주격 조사 — 받침이 있으면 '은', 없으면 '는'. */
+function withTopicParticle(noun: string): string {
+  const code = noun.charCodeAt(noun.length - 1)
+  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
+  return `${noun}${hasFinalConsonant ? '은' : '는'}`
+}
+
+/** 결과값을 그대로 늘어놓지 않고 사람이 답하듯 한 문장으로 합친다 — DESIGN.md §10 "결과 응답 스타일" 참고. */
+function describeWeather(result: WeatherLookupResult): string {
+  const place = withTopicParticle(result.region || result.location)
+  const temperature = Math.round(result.temperature)
+  const apparent = Math.round(result.apparentTemperature)
+  const rainNote = result.precipitation > 0 ? ` 비도 조금 내리고 있어요 (강수량 ${result.precipitation}mm).` : ''
+  return `${place} 지금 ${temperature}°, ${withCopula(result.description)} 체감은 ${apparent}°이고, 습도는 ${result.humidity}%, 바람은 초속 ${result.windSpeed}m로 불고 있어요.${rainNote}`
+}
+
 function WeatherResultCard({ result }: { result: WeatherLookupResult }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3">
+      <p className="text-sm leading-6 text-foreground">{describeWeather(result)}</p>
+      <div className="flex items-baseline justify-between gap-3 border-t border-hairline pt-3">
         <div>
           <p className="text-sm text-muted">{result.region}</p>
           <p className="text-2xl font-semibold text-foreground">{Math.round(result.temperature)}°</p>
