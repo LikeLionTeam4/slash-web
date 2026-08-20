@@ -17,7 +17,7 @@ export function parseCommandChain(input: string): ChainedCommand | null {
 }
 
 /** Chains with a real implementation elsewhere (SearchBar checks these before falling back to this file). */
-const REAL_CHAINS = new Set(['파일', '모델/검색', '네이버', '네이버/지도', '구글'])
+const REAL_CHAINS = new Set(['파일', '모델/검색', '네이버', '네이버/지도', '구글', '날씨'])
 
 /** Placeholder message for any registered chain that isn't in REAL_CHAINS yet. */
 export function mockPlaceholderMessage(chain: ChainedCommand): string | null {

@@ -200,6 +200,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const [modelHighlight, setModelHighlight] = useState(0)
   const [selectedModel, setSelectedModel] = useState<SelectedModel>({ service: 'claude', modelId: 'sonnet-5' })
   const [modelSearchPickerOpen, setModelSearchPickerOpen] = useState(false)
+  // Enter로 제출했을 때도 검색 버튼을 마우스로 누른 것과 같은 눌림 효과를 잠깐 보여준다.
+  const [keyboardPressed, setKeyboardPressed] = useState(false)
   // 값을 받는 명령(`/네이버`, `/구글`, `/파일`, `/네이버/길찾기` …)은 명령어 텍스트를 입력창에
   // 남겨두지 않고 칩으로 뺀다. path = 명령어 경로, operands = 이미 확정된 값(칩).
   // 지금 입력 중인 값은 `value`에 있다 — 명령어와 검색어는 한 문자열로 합치지 않고 끝까지 따로
@@ -237,7 +239,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const isFreeText = hasText && !isCommand
   const hasAttachments = attachments.length > 0
   const active = focused || hasText || commandMode !== null
-  const shape = hasAttachments ? 'rounded-[28px]' : 'rounded-full'
+  // 완전 pill(rounded-full)은 명령어 칩·여러 줄 내용이 들어차면 곡률이 과해져 번잡해 보였다
+  // (2026-08-20) — 항상 첨부파일 상태와 같은 28px 라운드 사각형으로 통일.
+  const shape = 'rounded-[28px]'
 
   // 명령어가 받는 값들의 이름 — 하나면 한 번에 받고, 둘 이상이면 Enter마다 한 값씩 확정한다.
   const operandNames = (commandMode ? findCommand(commandMode.path)?.operands : null) ?? []
@@ -261,6 +265,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const placeholderMsg = commandChain ? mockPlaceholderMessage(commandChain) : null
   const deepLink = commandChain ? buildDeepLink(commandChain) : null
   const deepLinkHintText = commandChain ? deepLinkHint(commandChain) : null
+  // 값을 하나만 받고, 딥링크도 없고, /파일처럼 자기 전용 패널도 없는 명령(예: /날씨) — Enter를
+  // 치면 자유 텍스트와 같은 방식으로 "/명령어 값" 한 문자열을 그대로 백엔드에 보낸다.
+  const isGenericCommand = commandMode !== null && !stepped && !deepLink && commandMode.path[0] !== '파일'
   // 값을 여러 개 받는 명령은 입력 중에도 "지금 무슨 값을 받는 중인지"를 계속 보여준다.
   // 하나만 받는 명령은 값을 치기 시작하면 딥링크·준비중 안내에 자리를 넘긴다.
   const commandModeHint =
@@ -332,15 +339,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   }, [value])
 
   // 자유 텍스트 모드를 벗어나면(명령어로 바꾸거나 입력을 지우면) 진행 중이던 폴링도 함께 멈춘다.
+  // /날씨처럼 딥링크 없는 단일 값 명령(isGenericCommand)도 같은 freeTextTask를 빌려 쓰므로
+  // 그 모드에 있는 동안에는 여기서 지우면 안 된다.
   useEffect(() => {
-    if (isFreeText) return
+    if (isFreeText || isGenericCommand) return
     if (freeTextPollTimeoutRef.current !== null) {
       clearTimeout(freeTextPollTimeoutRef.current)
       freeTextPollTimeoutRef.current = null
     }
     freeTextTaskIdRef.current = null
     setFreeTextTask({ phase: 'idle' })
-  }, [isFreeText])
+  }, [isFreeText, isGenericCommand])
 
   // 파일 검색 모드를 벗어나면(다른 명령으로 바꾸거나 명령어 자체를 지우면) 진행 중이던 폴링도
   // 함께 멈춘다 — /상태 쪽의 같은 목적 effect와 동일한 이유.
@@ -449,6 +458,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // window.open은 클릭/Enter 같은 사용자 제스처 안에서 호출해야 팝업 차단을 피할 수 있다.
   function openDeepLink(url: string) {
     window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  /** Enter로 실제 제출이 일어날 때 검색 버튼에 마우스 클릭과 같은 눌림 효과를 준다. */
+  function flashSubmitButton() {
+    setKeyboardPressed(true)
+    window.setTimeout(() => setKeyboardPressed(false), 150)
   }
 
   /** POST /api/v1/requests → GET /api/v1/tasks/{taskId} 2초 폴링 — WSS는 아직 안 붙였다(§7,
@@ -596,8 +611,18 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       setValue('')
       return
     }
-    if (!deepLink) return
-    openDeepLink(deepLink)
+    if (deepLink) {
+      flashSubmitButton()
+      openDeepLink(deepLink)
+      return
+    }
+    // 딥링크도, /파일 같은 전용 패널도 없는 단일 값 명령(예: /날씨) — 자유 텍스트와 같은 방식으로
+    // "/명령어 값" 한 문자열을 그대로 백엔드에 보낸다. commandMode는 isGenericCommand가 참일 때만
+    // null이 아니다.
+    if (isGenericCommand && hasText) {
+      flashSubmitButton()
+      runFreeTextCommand(`/${commandMode!.path.join('/')} ${trimmed}`)
+    }
   }
 
   /** Enter가 하는 일을 한 곳에 모아둔다 — keydown과 (조합 확정 시) keyup 양쪽에서 부른다. */
@@ -613,10 +638,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
     // 검색 폴더는 서버가 자동으로 고르므로 Enter는 접수만 한다 — 진행 중엔 중복 접수를 막는다.
     if (showFileSearch) {
-      if (hasText) runFileSearchCommand(trimmed)
+      if (hasText) {
+        flashSubmitButton()
+        runFileSearchCommand(trimmed)
+      }
       return
     }
     if (showStatusCommand) {
+      flashSubmitButton()
       runStatusCommand()
       return
     }
@@ -625,6 +654,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       return
     }
     if (isFreeText) {
+      flashSubmitButton()
       runFreeTextCommand(trimmed)
       return
     }
@@ -641,6 +671,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     pendingEnterRef.current = false
 
     if (e.key === 'Enter') {
+      // Shift+Enter는 항상 줄바꿈 — 우리 쪽 제출/확정 로직을 타지 않고 textarea 기본 동작에 맡긴다.
+      if (e.shiftKey) return
+
       // 한글/일본어/중국어는 마지막 음절이 조합 중인 채로 Enter를 맞는다. 그 Enter로 여기서 바로
       // 상태를 바꾸면 조합 중이던 글자가 중복 입력된다(예전 "검색" 버그). 그렇다고 그냥 버리면
       // 한글 입력은 항상 Enter를 두 번 눌러야 한다.
@@ -650,6 +683,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       //  ref와 짧은 유예 시간까지 함께 본다.)
       const justFinishedComposing = Date.now() - compositionEndedAtRef.current < 50
       if (e.nativeEvent.isComposing || isComposingRef.current || justFinishedComposing) {
+        // 입력창이 textarea로 바뀐 뒤로는(2026-08-19) 여기서도 기본 동작을 막아야 한다 — 안 그러면
+        // keyup으로 미루는 사이 Enter의 기본 동작(줄바꿈)이 먼저 실행돼, 조합이 막 끝난 슬래시
+        // 명령어 뒤에 줄바꿈이 끼어든다(예: "/날씨" 확정 시 줄바꿈되던 버그).
+        e.preventDefault()
         pendingEnterRef.current = true
         return
       }
@@ -858,146 +895,157 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               ))}
             </div>
           )}
-          <div className="flex w-full items-end gap-3 px-4 py-3.5">
-            <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
-                isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/8 text-foreground'
-              }`}
-            >
-              /
-            </span>
-            {commandMode && (
-              <div className="flex shrink-0 items-center gap-1.5 pb-1">
-                <span className="rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
-                  {commandMode.path.join('/')}
-                </span>
-                {commandMode.operands.map((operand, i) => (
-                  <OperandChip
-                    key={`${operandNames[i]}-${operand}`}
-                    label={`${operandNames[i]} ${operand}`}
-                    // 앞의 값을 지우면 그 뒤에 받은 값들도 함께 빠진다 — 순서가 곧 의미이므로
-                    // 중간만 비어 있는 상태를 만들지 않는다.
-                    onClear={() => {
-                      setCommandMode({ ...commandMode, operands: commandMode.operands.slice(0, i) })
-                      textInputRef.current?.focus()
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            <textarea
-              ref={textInputRef}
-              value={value}
-              rows={1}
-              onChange={(e) => handleValueChange(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              onKeyUp={handleInputKeyUp}
-              onCompositionStart={() => {
-                isComposingRef.current = true
-              }}
-              onCompositionEnd={() => {
-                isComposingRef.current = false
-                compositionEndedAtRef.current = Date.now()
-              }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              placeholder={
-                isRecording
-                  ? '듣고 있어요...'
-                  : commandMode
-                    ? nextOperandName
-                      ? `${nextOperandName} 입력`
-                      : ''
-                    : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
-              }
-              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-control font-medium leading-6 text-foreground placeholder:text-muted focus:outline-none"
-            />
-            <div className="group relative flex shrink-0 items-center">
-              <Tooltip label="마이크 설정">
-                <button
-                  type="button"
-                  aria-label="마이크 설정"
-                  onClick={() => setMicSettingsOpen((o) => !o)}
-                  className="flex h-6 w-4 items-center justify-center text-muted opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip label={holdToRecord ? '길게 눌러 녹음' : '클릭해서 녹음'}>
-                <button
-                  type="button"
-                  aria-label="음성 입력"
-                  onMouseDown={holdToRecord ? startRecording : undefined}
-                  onMouseUp={holdToRecord ? stopRecording : undefined}
-                  onMouseLeave={holdToRecord ? () => isRecording && stopRecording() : undefined}
-                  onTouchStart={holdToRecord ? startRecording : undefined}
-                  onTouchEnd={holdToRecord ? stopRecording : undefined}
-                  onClick={!holdToRecord ? () => (isRecording ? stopRecording() : startRecording()) : undefined}
-                  className={`shrink-0 transition-colors ${
-                    isRecording ? 'animate-pulse text-accent-blue' : 'text-muted hover:text-foreground'
-                  }`}
-                >
-                  <Mic size={18} />
-                </button>
-              </Tooltip>
-              {micSettingsOpen && (
-                <MicSettingsPopover
-                  selectedDeviceId={selectedMicId}
-                  onSelectDevice={setSelectedMicId}
-                  holdToRecord={holdToRecord}
-                  onHoldToRecordChange={setHoldToRecord}
-                  onClose={() => setMicSettingsOpen(false)}
-                />
+          {/* 두 줄로 나눈다(2026-08-20) — Shift+Enter로 줄바꿈해 내용이 길어져도 아래 툴바(마이크·
+              제출·+ 버튼)는 항상 같은 높이로 고정되고, 늘어나는 건 위 textarea뿐이어야 한다.
+              하나의 행에서 items-end로 정렬하던 예전 구조는 textarea가 커질 때 툴바 버튼들이
+              바닥에 붙은 채로 같이 아래로 밀려 내려가 버렸다(Claude Code 스타일 참고). */}
+          <div className="flex w-full flex-col gap-1.5 px-4 py-3.5">
+            <div className="flex w-full items-start gap-3">
+              {commandMode && (
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5 pt-1">
+                  <span className="rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
+                    {commandMode.path.join('/')}
+                  </span>
+                  {commandMode.operands.map((operand, i) => (
+                    <OperandChip
+                      key={`${operandNames[i]}-${operand}`}
+                      label={`${operandNames[i]} ${operand}`}
+                      // 앞의 값을 지우면 그 뒤에 받은 값들도 함께 빠진다 — 순서가 곧 의미이므로
+                      // 중간만 비어 있는 상태를 만들지 않는다.
+                      onClear={() => {
+                        setCommandMode({ ...commandMode, operands: commandMode.operands.slice(0, i) })
+                        textInputRef.current?.focus()
+                      }}
+                    />
+                  ))}
+                </div>
               )}
+              <textarea
+                ref={textInputRef}
+                value={value}
+                rows={1}
+                onChange={(e) => handleValueChange(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                onKeyUp={handleInputKeyUp}
+                onCompositionStart={() => {
+                  isComposingRef.current = true
+                }}
+                onCompositionEnd={() => {
+                  isComposingRef.current = false
+                  compositionEndedAtRef.current = Date.now()
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder={
+                  isRecording
+                    ? '듣고 있어요...'
+                    : commandMode
+                      ? nextOperandName
+                        ? `${nextOperandName} 입력`
+                        : ''
+                      : "무엇이든 물어보세요 · '/'로 명령어도 가능해요"
+                }
+                className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-control font-medium leading-6 text-foreground placeholder:text-muted focus:outline-none"
+              />
             </div>
-            {hasText ? (
-              <Tooltip label="검색하기">
-                <button
-                  type="button"
-                  aria-label="검색"
-                  onClick={submitCommand}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:brightness-110 ${
-                    isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/12 text-foreground'
-                  }`}
-                >
-                  <ArrowUp size={16} />
-                </button>
-              </Tooltip>
-            ) : (
-              <Tooltip label="음성 모드">
-                <button
-                  type="button"
-                  aria-label="음성 모드"
-                  onClick={() => alert('준비 중입니다.')}
-                  className="shrink-0 text-muted transition-colors hover:text-foreground"
-                >
-                  <AudioLines size={18} />
-                </button>
-              </Tooltip>
-            )}
-            <div className="relative shrink-0">
-              <Tooltip label="추가">
-                <button
-                  type="button"
-                  aria-label="추가"
-                  onClick={() => setAddMenuOpen((o) => !o)}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-                    addMenuOpen ? 'bg-foreground/12 text-foreground' : 'text-muted hover:text-foreground'
-                  }`}
-                >
-                  <Plus size={18} />
-                </button>
-              </Tooltip>
-
-              {addMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-hairline bg-surface-raised py-1.5 text-left shadow-2xl">
-                    <AddMenuItem icon={Paperclip} label="파일 또는 사진 추가" onClick={handleAddFiles} />
-                    <AddMenuItem icon={Camera} label="스크린샷 캡처하기" onClick={handleCaptureScreenshot} />
-                  </div>
-                </>
+            <div className="flex w-full items-center gap-3">
+              {/* 아이들·모드 표시용 "/" — 클로드 컴포저의 모드 토글 자리와 같은 위치(하단 좌측)로
+                  옮겼다(2026-08-20). 콘텐츠(경로 칩·값)가 아니라 크롬이라 늘어나는 위 줄이 아니라
+                  높이가 고정된 이 줄에 속해야 위 칸에 혼자 붕 떠 보이지 않는다. */}
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
+                  isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/8 text-foreground'
+                }`}
+              >
+                /
+              </span>
+              <div className="group relative ml-auto flex shrink-0 items-center">
+                <Tooltip label="마이크 설정">
+                  <button
+                    type="button"
+                    aria-label="마이크 설정"
+                    onClick={() => setMicSettingsOpen((o) => !o)}
+                    className="flex h-6 w-4 items-center justify-center text-muted opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip label={holdToRecord ? '길게 눌러 녹음' : '클릭해서 녹음'}>
+                  <button
+                    type="button"
+                    aria-label="음성 입력"
+                    onMouseDown={holdToRecord ? startRecording : undefined}
+                    onMouseUp={holdToRecord ? stopRecording : undefined}
+                    onMouseLeave={holdToRecord ? () => isRecording && stopRecording() : undefined}
+                    onTouchStart={holdToRecord ? startRecording : undefined}
+                    onTouchEnd={holdToRecord ? stopRecording : undefined}
+                    onClick={!holdToRecord ? () => (isRecording ? stopRecording() : startRecording()) : undefined}
+                    className={`shrink-0 transition-colors ${
+                      isRecording ? 'animate-pulse text-accent-blue' : 'text-muted hover:text-foreground'
+                    }`}
+                  >
+                    <Mic size={18} />
+                  </button>
+                </Tooltip>
+                {micSettingsOpen && (
+                  <MicSettingsPopover
+                    selectedDeviceId={selectedMicId}
+                    onSelectDevice={setSelectedMicId}
+                    holdToRecord={holdToRecord}
+                    onHoldToRecordChange={setHoldToRecord}
+                    onClose={() => setMicSettingsOpen(false)}
+                  />
+                )}
+              </div>
+              {hasText ? (
+                <Tooltip label="검색하기">
+                  <button
+                    type="button"
+                    aria-label="검색"
+                    onClick={submitCommand}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-100 hover:brightness-110 active:scale-90 ${
+                      keyboardPressed ? 'scale-90 brightness-110' : 'scale-100'
+                    } ${isCommand ? 'bg-accent-blue text-white' : 'bg-foreground/12 text-foreground'}`}
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                </Tooltip>
+              ) : (
+                <Tooltip label="음성 모드">
+                  <button
+                    type="button"
+                    aria-label="음성 모드"
+                    onClick={() => alert('준비 중입니다.')}
+                    className="shrink-0 text-muted transition-colors hover:text-foreground"
+                  >
+                    <AudioLines size={18} />
+                  </button>
+                </Tooltip>
               )}
+              <div className="relative shrink-0">
+                <Tooltip label="추가">
+                  <button
+                    type="button"
+                    aria-label="추가"
+                    onClick={() => setAddMenuOpen((o) => !o)}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                      addMenuOpen ? 'bg-foreground/12 text-foreground' : 'text-muted hover:text-foreground'
+                    }`}
+                  >
+                    <Plus size={18} />
+                  </button>
+                </Tooltip>
+
+                {addMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-hairline bg-surface-raised py-1.5 text-left shadow-2xl">
+                      <AddMenuItem icon={Paperclip} label="파일 또는 사진 추가" onClick={handleAddFiles} />
+                      <AddMenuItem icon={Camera} label="스크린샷 캡처하기" onClick={handleCaptureScreenshot} />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1166,7 +1214,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         </div>
       )}
 
-      {isFreeText && freeTextTask.phase !== 'idle' && (
+      {(isFreeText || isGenericCommand) && freeTextTask.phase !== 'idle' && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
           {freeTextTask.phase === 'running' && (
             <p className="flex items-center gap-1.5 text-sm text-muted">
