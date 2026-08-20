@@ -50,6 +50,9 @@ export const COMMAND_TREE: CommandNode[] = [
   // 날씨는 네이버 아래가 아니라 최상위다 — 네이버조차 외부 기상 API를 받아 보여주는 것이라,
   // "어느 서비스로 볼지"를 물을 이유가 없다. 백엔드가 API에서 직접 받아온 값을 돌려준다.
   { id: '날씨', label: '날씨', description: '지역 날씨', operands: ['지역'] },
+  // slash-nlu가 150자 미만이면 NEEDS_CLARIFICATION으로 되묻는다 — 프론트는 그 흐름을
+  // 자유 텍스트와 동일하게 그대로 받으면 되므로 별도 검증 없이 값만 넘긴다.
+  { id: '요약', label: '요약', description: '긴 텍스트를 요약해요 (150자 이상)', operands: ['내용'] },
 ]
 
 /** 경로(`['네이버','지도']`)에 해당하는 노드. 중간에 끊기면 null. */
