@@ -10,7 +10,6 @@ import {
   X,
   FileText,
   ChevronDown,
-  Loader2,
   Droplets,
   Wind,
 } from 'lucide-react'
@@ -85,6 +84,18 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
         <X size={11} />
       </button>
     </span>
+  )
+}
+
+/** 결과를 기다리는 동안 쓰는 표시 — 제네릭 스피너 대신 브랜드 모티프인 "/"를 펄스시킨다(§7). */
+function LoadingIndicator({ label, className = '' }: { label: string; className?: string }) {
+  return (
+    <p className={`flex items-center gap-1.5 text-sm text-muted ${className}`}>
+      <span className="flex h-4 w-4 shrink-0 animate-pulse items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
+        /
+      </span>
+      {label}
+    </p>
   )
 }
 
@@ -1170,10 +1181,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           {fileSearchTask.phase === 'idle' ? (
             <p className="px-4 py-3 text-sm text-muted">Enter를 누르면 등록된 PC에서 찾아요.</p>
           ) : fileSearchTask.phase === 'running' ? (
-            <p className="flex items-center gap-1.5 px-4 py-3 text-sm text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              {TASK_STATUS_LABELS[fileSearchTask.status] ?? '검색하는 중이에요'}
-            </p>
+            <LoadingIndicator
+              className="px-4 py-3"
+              label={TASK_STATUS_LABELS[fileSearchTask.status] ?? '검색하는 중이에요'}
+            />
           ) : fileSearchTask.phase === 'failed' ? (
             <p className="px-4 py-3 text-sm text-accent-blue">{fileSearchTask.message}</p>
           ) : fileSearchTask.result.items.length === 0 ? (
@@ -1203,10 +1214,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
           {statusTask.phase === 'idle' && <p className="text-sm text-muted">Enter를 누르면 이 PC의 상태를 확인해요.</p>}
           {statusTask.phase === 'running' && (
-            <p className="flex items-center gap-1.5 text-sm text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              {TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'}
-            </p>
+            <LoadingIndicator label={TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'} />
           )}
           {statusTask.phase === 'failed' && <p className="text-sm text-accent-blue">{statusTask.message}</p>}
           {statusTask.phase === 'done' && (
@@ -1241,10 +1249,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       {(isFreeText || isGenericCommand) && freeTextTask.phase !== 'idle' && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
           {freeTextTask.phase === 'running' && (
-            <p className="flex items-center gap-1.5 text-sm text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              {TASK_STATUS_LABELS[freeTextTask.status] ?? '처리하는 중이에요'}
-            </p>
+            <LoadingIndicator label={TASK_STATUS_LABELS[freeTextTask.status] ?? '처리하는 중이에요'} />
           )}
           {freeTextTask.phase === 'needsClarification' && (
             <div className="flex flex-col gap-1">

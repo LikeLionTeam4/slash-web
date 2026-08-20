@@ -4,10 +4,12 @@ import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command, Dow
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
 import { useAuth, useHomePath } from '../hooks/authContext'
-import { RECENT_ENTRIES } from '../lib/mockHistory'
+import { getTaskHistory, toHistoryEntry, type HistoryEntry } from '../lib/tasks'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { useCurrentUser } from '../hooks/currentUserContext'
 import type { SettingsCategoryId } from '../lib/settingsCategory'
+
+const RECENT_LIMIT = 8
 
 /** Tailwind의 `md:`와 같은 값이어야 한다 — 접힘(레일) 모드를 쓸지 말지를 JS와 CSS가 같이 판단한다. */
 const DESKTOP_QUERY = '(min-width: 768px)'
@@ -60,6 +62,14 @@ export function Sidebar({
   const { displayName, email } = useCurrentUser()
   const profileLabel = displayName ?? '고객'
   const avatarLetter = (displayName ?? email ?? 'S').charAt(0).toUpperCase()
+  const [recentEntries, setRecentEntries] = useState<HistoryEntry[]>([])
+
+  // 사이드바는 상시 노출되는 크롬이라 오류를 문구로 알리지 않는다 — 실패하면 그냥 빈 목록으로 둔다.
+  useEffect(() => {
+    getTaskHistory({ limit: RECENT_LIMIT })
+      .then((page) => setRecentEntries(page.items.map(toHistoryEntry)))
+      .catch(() => {})
+  }, [])
   // 레일(아이콘만) 모드는 데스크톱에서만 — 모바일 서랍은 열리면 항상 제 너비로 보인다.
   const rail = isDesktop && collapsed
 
@@ -160,7 +170,7 @@ export function Sidebar({
           <div className="mt-4 flex-1 overflow-y-auto px-3">
             <p className="px-3 pb-1 text-xs font-medium text-muted">최근</p>
             <div className="flex flex-col gap-0.5">
-              {RECENT_ENTRIES.map((item) => (
+              {recentEntries.map((item) => (
                 <button
                   key={item.id}
                   type="button"
