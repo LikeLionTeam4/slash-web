@@ -43,6 +43,11 @@ jobs:
           VITE_COGNITO_CLIENT_ID: 4pjdb0cuqt991vpclf1b8ai91e
           VITE_COGNITO_DOMAIN: https://slash-dev-061039804626.auth.ap-northeast-2.amazoncognito.com
           VITE_API_BASE_URL: https://api.dev.sbsh.cloud
+          # clarity.microsoft.com 프로젝트 ID. Clarity ID도 Cognito Client ID처럼
+          # 클라이언트 번들에 그대로 노출되는 공개 값이라 시크릿 아님 — 인라인으로 둔다.
+          # local(deploy-local.yml)에는 일부러 안 넣는다 — 팀 검증용 실험 트래픽이
+          # Clarity 대시보드(실사용 분석)에 섞이는 걸 피하기 위함.
+          VITE_CLARITY_PROJECT_ID: y59hfygw8b
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

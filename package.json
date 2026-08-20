@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@microsoft/clarity": "^1.0.2",
     "lucide-react": "^1.27.0",
     "oidc-client-ts": "^3.5.0",
     "react": "^19.2.8",

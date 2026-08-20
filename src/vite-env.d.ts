@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_COGNITO_DOMAIN: string
   /** frontend-api-contract.md §9 TBD — 백엔드/인프라가 dev API 주소를 확정하면 채운다. */
   readonly VITE_API_BASE_URL: string
+  /** MS Clarity 프로젝트 ID. 비어있거나 dev 빌드면 초기화하지 않는다. lib/clarity.ts 참고. */
+  readonly VITE_CLARITY_PROJECT_ID?: string
 }
 
 interface ImportMeta {
