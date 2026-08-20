@@ -96,3 +96,77 @@ export function createTaskRequest(text: string, selectedDeviceId?: string): Prom
 export function getTask(taskId: string): Promise<TaskDetail> {
   return apiRequest<TaskDetail>(`/api/v1/tasks/${taskId}`)
 }
+
+// 이력 화면·대시보드·사이드바 "최근" — frontend-api-contract.md "이력 화면 (P0-B)" 구현.
+// result·parameters는 목록에 없다(한 건에 64KB까지 허용돼 스무 줄이면 1MB를 넘길 수 있어서) —
+// 한 건 펼칠 때는 getTask로 따로 받는다.
+export interface TaskHistoryItem {
+  taskId: string
+  status: TaskStatus
+  /** 분석 전이거나 분석에 실패했으면 없다. */
+  taskType?: string
+  processingRoute?: string
+  /** PC를 거치지 않는 작업(/weather·/summary)은 없다. */
+  deviceId?: string
+  requestSummary: string
+  errorCode?: string
+  createdAt: string
+  /** 끝난 작업만 있다. */
+  completedAt?: string
+}
+
+export interface TaskHistoryFilter {
+  taskType?: string
+  status?: TaskStatus
+  deviceId?: string
+  /** 1~100, 기본 20. */
+  limit?: number
+  /** 이전 응답의 nextCursor를 그대로 넣는다 — 뜻을 알 수 없는 값이라 내용을 들여다볼 필요는 없다. */
+  cursor?: string
+}
+
+export interface TaskHistoryPage {
+  items: TaskHistoryItem[]
+  /** 없으면 마지막 쪽 — 항목 수가 limit과 같은지로 판단하면 안 된다. */
+  nextCursor?: string
+}
+
+export function getTaskHistory(filter: TaskHistoryFilter = {}): Promise<TaskHistoryPage> {
+  const params = new URLSearchParams()
+  if (filter.taskType) params.set('taskType', filter.taskType)
+  if (filter.status) params.set('status', filter.status)
+  if (filter.deviceId) params.set('deviceId', filter.deviceId)
+  if (filter.limit) params.set('limit', String(filter.limit))
+  if (filter.cursor) params.set('cursor', filter.cursor)
+
+  const query = params.toString()
+  return apiRequest<TaskHistoryPage>(`/api/v1/tasks${query ? `?${query}` : ''}`)
+}
+
+/** 히스토리·최근·대시보드가 공유하는 행 모양. `text`가 `/`로 시작하면 슬래시 명령이다 —
+ *  requestSummary는 사용자가 입력한 원문 그대로라, 명령으로 물었으면 원문도 `/`로 시작한다. */
+export type HistoryEntry = { id: string; text: string; isCommand: boolean; timeLabel: string }
+
+export function toHistoryEntry(item: TaskHistoryItem): HistoryEntry {
+  return {
+    id: item.taskId,
+    text: item.requestSummary,
+    isCommand: item.requestSummary.startsWith('/'),
+    timeLabel: formatRelativeTime(item.createdAt),
+  }
+}
+
+export function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const diffMinutes = Math.floor(diffMs / 60_000)
+  const diffHours = Math.floor(diffMs / 3_600_000)
+  const diffDays = Math.floor(diffMs / 86_400_000)
+
+  if (diffMinutes < 1) return '방금 전'
+  if (diffMinutes < 60) return `${diffMinutes}분 전`
+  if (diffHours < 24) return `${diffHours}시간 전`
+  if (diffDays === 1) return '어제'
+  if (diffDays === 2) return '그저께'
+  if (diffDays < 7) return `${diffDays}일 전`
+  return new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+}
