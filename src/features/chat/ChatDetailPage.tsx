@@ -1,12 +1,30 @@
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
-import { ChevronDown, Share2, Copy, Volume2, ThumbsUp, ThumbsDown, RotateCcw, FileText, Globe, Download, CornerDownRight } from 'lucide-react'
+import {
+  ChevronDown,
+  Share2,
+  Copy,
+  Check,
+  Volume2,
+  Square,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCcw,
+  FileText,
+  Globe,
+  Download,
+  CornerDownRight,
+} from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
 import { SearchBar } from '../../components/SearchBar'
 import { findThread, type AssistantContent, type DownloadFile, type FileResult, type WebResult } from './mockThreads'
 
-const ACTION_ICONS = [
-  { icon: Copy, label: '복사' },
-  { icon: Volume2, label: '읽어주기' },
+const ACTION_BUTTON_CLASS =
+  'flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground'
+
+// 아직 백엔드 연동이 없는 자리 — 좋아요/별로예요는 저장할 엔드포인트가, 다시 생성은 원 요청
+// 텍스트를 들고 있는 실 채팅 API가 있어야 한다(지금은 mockThreads.ts 기반).
+const DECORATIVE_ICONS = [
   { icon: ThumbsUp, label: '좋아요' },
   { icon: ThumbsDown, label: '별로예요' },
   { icon: RotateCcw, label: '다시 생성' },
@@ -131,6 +149,35 @@ function ThreadNotFound() {
 export function ChatDetailPage() {
   const { id } = useParams()
   const thread = findThread(id)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
+
+  // 라우트를 벗어나면(다른 대화로 이동 등) 읽던 것도 멈춘다 — 안 그러면 화면엔 안 보이는데
+  // 목소리만 계속 나온다.
+  useEffect(() => () => window.speechSynthesis?.cancel(), [])
+
+  const copyText = (text: string, i: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIndex(i)
+      setTimeout(() => setCopiedIndex((cur) => (cur === i ? null : cur)), 1500)
+    })
+  }
+
+  const toggleSpeak = (text: string, i: number) => {
+    if (!window.speechSynthesis) return
+    if (speakingIndex === i) {
+      window.speechSynthesis.cancel()
+      setSpeakingIndex(null)
+      return
+    }
+    window.speechSynthesis.cancel() // 겹쳐 읽지 않도록 다른 답변 재생을 먼저 멈춘다.
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'ko-KR'
+    utterance.onend = () => setSpeakingIndex((cur) => (cur === i ? null : cur))
+    utterance.onerror = () => setSpeakingIndex((cur) => (cur === i ? null : cur))
+    window.speechSynthesis.speak(utterance)
+    setSpeakingIndex(i)
+  }
 
   if (!thread) return <ThreadNotFound />
 
@@ -185,12 +232,19 @@ export function ChatDetailPage() {
               )}
 
               <div className="mt-3 flex items-center gap-1">
-                {ACTION_ICONS.map(({ icon: Icon, label }) => (
+                <Tooltip label={copiedIndex === i ? '복사됨' : '복사'}>
+                  <button type="button" onClick={() => copyText(item.text, i)} className={ACTION_BUTTON_CLASS}>
+                    {copiedIndex === i ? <Check size={15} /> : <Copy size={15} />}
+                  </button>
+                </Tooltip>
+                <Tooltip label={speakingIndex === i ? '정지' : '읽어주기'}>
+                  <button type="button" onClick={() => toggleSpeak(item.text, i)} className={ACTION_BUTTON_CLASS}>
+                    {speakingIndex === i ? <Square size={15} /> : <Volume2 size={15} />}
+                  </button>
+                </Tooltip>
+                {DECORATIVE_ICONS.map(({ icon: Icon, label }) => (
                   <Tooltip key={label} label={label}>
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground"
-                    >
+                    <button type="button" className={ACTION_BUTTON_CLASS}>
                       <Icon size={15} />
                     </button>
                   </Tooltip>
