@@ -140,7 +140,7 @@ Family: **Pretendard Variable** (fallback `-apple-system, system-ui, Segoe UI, R
 | Role | Size | Weight | Line height | Use |
 |---|---:|---:|---:|---|
 | Hero heading | 40px | 700 | 1.25 | "무엇을 도와드릴까요, 사장님?" |
-| Hero subheading | 16px | 400 | 1.6 | "파일·웹 검색, 생성형 AI, PC 제어까지 한 번에." |
+| ~~Hero subheading~~ | 16px | 400 | 1.6 | Removed 2026-08-20 (§10) — token still exists (feature descriptions reuse the same size), just no longer used for a hero-level line |
 | Control (input/chips/buttons) | 15px | 500 | 1.4 | Search input text, chip labels |
 | Feature title | 16px | 600 | 1.4 | "웹 검색" / "AI 답변" / "안전한 검색" |
 | Feature description | 14px | 400 | 1.5 | Muted one-line support copy |
@@ -220,7 +220,7 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
 
 ## 5. Layout Principles
 
-- **App shell**: fixed-height sidebar (§4) + a flex-1 scrollable main pane. The home screen's content sits in a single column, horizontally centered: heading → subheading → search bar. (Suggestion chips used to close out this column — removed 2026-08-20, see §4 Suggestion Chip.) No "scroll for more" hint — removed at the user's request (2026-07-29); the search bar is the natural end of the page, not a teaser for more content below. **Measured-once top offset, not live `justify-center` (2026-08-20, revised twice from the original vertically-centered layout below)**: true vertical centering recomputes on every height change, and a multi-line search bar (Shift+Enter) growing taller changed the block's total height often enough that the heading and search bar visibly shifted position on screen every time — the search bar growing taller is expected and fine, but *where it sits* moving is not, and the group (heading+subheading+search bar) still has to actually sit centered, not just approximately. First pass used a guessed fixed `pt-[15vh]`, which stopped the shifting but wasn't a real center. `HomePage` now measures the group's natural (idle) height with a ref in a `useLayoutEffect` that runs once on mount, computes `(container height − group height) / 2`, and applies that as the group's own `paddingTop` — exact centering for the idle state, frozen thereafter so later growth only extends downward. (An intermediate fix kept the [now-removed] suggestion chips mounted-but-`invisible` while the search bar was active, to reserve their layout space without moving anything — superseded once the chips themselves were cut.) The original 2026-07-30 decision (`main` vertically centers, matching a reference screenshot's greeting+input block sitting mid-viewport) is superseded by this — positional stability wins over live recentering once content height became genuinely dynamic, but the *measured* offset still delivers the original "sits centered" intent for the state that matters (idle, first paint).
+- **App shell**: fixed-height sidebar (§4) + a flex-1 scrollable main pane. The home screen's content sits in a single column, horizontally centered: heading → search bar. (A subheading and, before that, suggestion chips used to close out this column — both removed 2026-08-20, see §10 and §4 Suggestion Chip.) No "scroll for more" hint — removed at the user's request (2026-07-29); the search bar is the natural end of the page, not a teaser for more content below. **Measured-once top offset, not live `justify-center` (2026-08-20, revised twice from the original vertically-centered layout below)**: true vertical centering recomputes on every height change, and a multi-line search bar (Shift+Enter) growing taller changed the block's total height often enough that the heading and search bar visibly shifted position on screen every time — the search bar growing taller is expected and fine, but *where it sits* moving is not, and the group (heading+search bar — the subheading it also included at the time was itself cut later the same day, see §10) still has to actually sit centered, not just approximately. First pass used a guessed fixed `pt-[15vh]`, which stopped the shifting but wasn't a real center. `HomePage` now measures the group's natural (idle) height with a ref in a `useLayoutEffect` that runs once on mount, computes `(container height − group height) / 2`, and applies that as the group's own `paddingTop` — exact centering for the idle state, frozen thereafter so later growth only extends downward. (An intermediate fix kept the [now-removed] suggestion chips mounted-but-`invisible` while the search bar was active, to reserve their layout space without moving anything — superseded once the chips themselves were cut.) The original 2026-07-30 decision (`main` vertically centers, matching a reference screenshot's greeting+input block sitting mid-viewport) is superseded by this — positional stability wins over live recentering once content height became genuinely dynamic, but the *measured* offset still delivers the original "sits centered" intent for the state that matters (idle, first paint).
 - Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48px — matches the observed gaps between the hero block, input, chip row, and feature row.
 - Radius scale: 8px (small controls) / 12–16px (badges) / 28px (search bar, see §4) / full-pill (chips, submit button). Don't use Tailwind's bare `rounded-md`/`rounded-sm` defaults (6px/4px) since they fall outside this scale — use the arbitrary-value form (e.g. `rounded-[8px]`) to stay on-token.
 - No responsive/breakpoint evidence in the reference; treat mobile layout as unspecified and design it conservatively (stack the 3-column feature row, keep the search bar full-pill, and the sidebar likely wants to become an overlay/drawer rather than push content — not yet built) rather than inventing a breakpoint system.
@@ -275,6 +275,17 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 ### Don't
 - Don't pad reassurance copy ("안전한 검색" / "개인정보는 안전하게") with vague marketing language — keep it as short and concrete as the reference.
 
+### 홈 화면 부제 삭제 — 자비스 컨셉 (2026-08-20)
+
+프로젝트 컨셉이 "아이언맨의 자비스 같은 비서"라는 걸 확인하고, 홈 화면 부제("파일·웹 검색,
+생성형 AI, PC 제어까지 한 번에.")를 뺐다. 문구 자체는 §11 브랜드 내러티브를 정확히 요약하고
+있었지만, 톤이 문제였다 — 자비스는 "저는 파일 검색과 PC 제어가 가능합니다"라고 스스로를
+설명하지 않는다. 바로 위 인사말("무엇을 도와드릴까요, {이름}님?")이 이미 "비서가 나에게 말을
+거는" 관계를 만들어놓는데, 부제가 곧바로 기능 나열형 스펙 카탈로그 톤으로 되돌려버렸다. 능력
+안내는 입력창 placeholder·사이드바 명령어 가이드·온보딩 다이얼로그(§4)가 나눠서 이미 하고
+있어서, 인사말 하나만 남겨도 정보 공백은 없다. 교훈: 카피가 브랜드 내러티브와 사실관계는
+맞아도, 그 화면에서 "누가 말하는 톤인지"와 안 맞으면 다시 봐야 한다.
+
 ### 결과 응답 스타일 (Task Result Voice, 2026-08-20)
 
 구조화된 값(온도·습도·풍속 같은 필드)을 라벨:값 나열로만 보여주면 사람이 답하는 느낌이 안 난다.
@@ -297,6 +308,8 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 ## 11. Brand Narrative
 
 Slash (`/`) is an AI agent product: users interact through natural language or explicit `/` slash-commands to search files and the web, invoke generative AI, and control the local PC. The `/` is simultaneously the product's name, its logo, and its literal command trigger — the brand mark and the product mechanic are the same symbol.
+
+**Reference point (2026-08-20):** the project concept is an Iron Man-Jarvis-style personal assistant — an ever-present "someone" you talk to, not a dashboard of features you learn to operate. Practically this means copy and interaction design should favor an assistant speaking to and acting for the user ("무엇을 도와드릴까요, {이름}님?") over enumerating what the product can do; see §10 "홈 화면 부제 삭제" for a concrete case where this called for cutting copy rather than adding it.
 
 ## 12. Principles
 
@@ -372,6 +385,8 @@ Treat this section as a starting default, not verified brand motion.
 **Revised again:** 2026-08-20 (later still) — the `invisible`-chips fix above stopped the *chip row* from moving the search bar, but the search bar itself still shifted: `justify-center` (§5) recenters the whole heading+search bar+chips block on every height change, and a multi-line search bar (Shift+Enter) growing taller was exactly that kind of change. The request was explicit — the search bar growing vertically is fine, the search bar's on-screen *position* changing is not. First fix dropped `justify-center` for a guessed fixed `pt-[15vh]` top offset. Follow-up feedback the same day: the heading+search bar group needs to actually *be* centered as a unit, not just approximately placed — so `pt-[15vh]` became a one-time *measured* offset instead (§5 App shell), computed from the group's real idle height in a `useLayoutEffect` that runs once on mount.
 
 **Revised again:** 2026-08-20 (later still) — removed the home-screen example chips entirely (§4 Suggestion Chip) instead of continuing to fight their layout interactions with the search bar, and replaced them with a one-time **Onboarding Dialog** (§4) gated on `localStorage['slash-onboarding-seen']` — explicitly frontend-only (no backend "seen" field) at the user's request, so it's per-browser, not per-account. `src/lib/exampleCommands.ts` was deleted; `SearchBar`'s `onActiveChange` prop (added earlier the same day solely for the chip-overlap fix) was removed as dead code along with it.
+
+**Revised again:** 2026-08-20 (later still) — removed the home screen's hero subheading ("파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.") after confirming the project's concept is a Jarvis-style personal assistant (§11): the line was factually accurate but read as a feature list, undercutting the "assistant speaking to you" tone the greeting above it (H1) already established. Left just the greeting; capability discovery already lives in the placeholder text, sidebar command guide, and the same-day Onboarding Dialog, so nothing was lost. §3's typography table keeps the now-unused "Hero subheading" row struck through rather than deleted, for history.
 
 **Superseded bootstrap material:** this project was first bootstrapped from a claude-style test reference, then pivoted to Slash's own brand on 2026-07-29. Those two files (`DESIGN_DEPRECATED.md`, `DESIGN_DEPRECATED_claude.md`) were deleted on 2026-07-30 — a competing palette sitting in the repo root was more likely to be grepped by mistake than to be useful. They remain in git history at commit `0ea4bd1` if ever needed.
 

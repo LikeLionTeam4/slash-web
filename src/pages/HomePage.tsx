@@ -25,8 +25,11 @@ export function HomePage() {
   return (
     <div ref={rootRef} className="flex w-full max-w-3xl flex-1 flex-col items-center text-center">
       <div ref={coreRef} style={{ paddingTop: topOffset }} className="flex w-full flex-col items-center">
+        {/* 부제 삭제(2026-08-20) — "파일·웹 검색, 생성형 AI, PC 제어까지 한 번에."는 기능
+            나열형이라, 바로 위 인사말이 만든 "비서가 말을 거는" 느낌(자비스 컨셉)을 도로 스펙
+            카탈로그 톤으로 깨뜨렸다. 능력 안내는 placeholder 문구·사이드바 명령어 가이드·
+            온보딩 다이얼로그가 나눠서 이미 커버하므로, 인사말 하나로 남긴다. */}
         <h1 className="text-4xl font-bold tracking-tight">무엇을 도와드릴까요, {nameLabel}?</h1>
-        <p className="mt-3 text-muted">파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.</p>
 
         <div className="mt-10 w-full">
           <SearchBar />
