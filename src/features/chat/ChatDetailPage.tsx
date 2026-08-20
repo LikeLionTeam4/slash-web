@@ -37,7 +37,9 @@ export function ChatDetailPage() {
           if (cancelled) return
           setTask(detail)
           setLoadError(null)
-          if (!isTerminalTaskStatus(detail.status)) {
+          // NEEDS_CLARIFICATION은 종결 상태가 아니지만 이 task 자체는 더 안 바뀐다 — 백엔드가
+          // correlationId로 같은 태스크를 이어가지 않고, 답변도 새 text로 새 요청을 받는 구조라서다.
+          if (!isTerminalTaskStatus(detail.status) && detail.status !== 'NEEDS_CLARIFICATION') {
             timeoutId = window.setTimeout(poll, POLL_INTERVAL_MS)
           }
         })
@@ -152,7 +154,16 @@ export function ChatDetailPage() {
         </div>
 
         <div className="max-w-2xl">
-          {!isTerminalTaskStatus(task.status) ? (
+          {task.status === 'NEEDS_CLARIFICATION' ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-control leading-relaxed text-foreground">
+                {task.question ?? '추가 정보가 필요해요.'}
+              </p>
+              <p className="text-xs text-muted">
+                이 요청은 더 진행되지 않아요 — 위 질문에 맞게 새로 검색해주세요.
+              </p>
+            </div>
+          ) : !isTerminalTaskStatus(task.status) ? (
             <LoadingIndicator label={TASK_STATUS_LABELS[task.status] ?? '처리하는 중이에요'} />
           ) : task.status !== 'SUCCEEDED' ? (
             <p className="text-control leading-relaxed text-accent-blue">{taskErrorMessage(task.errorCode)}</p>
