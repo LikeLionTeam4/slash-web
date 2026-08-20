@@ -1282,7 +1282,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
       {showCommandHint && (
         <p className="pl-4 text-left text-xs text-accent-blue">
-          명령어 모드 — Slash 명령으로 웹 검색을 직접 제어해요.
+          명령어 모드 — Slash 명령으로 서버에 바로 요청해요.
         </p>
       )}
       {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
