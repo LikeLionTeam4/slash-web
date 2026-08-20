@@ -9,7 +9,9 @@ export function HomePage() {
   const nameLabel = displayName ? `${displayName}님` : '고객님'
   // 검색창 아래의 제안·힌트·결과 패널은 absolute 오버레이라 이 예시 칩을 밀어내지 않고 그 위에
   // 뜬다(SearchBar.tsx의 onActiveChange 주석 참고) — 겹치지 않도록 그 패널이 뜰 만한 상태에는
-  // 예시를 아예 숨긴다.
+  // 예시를 숨긴다. 단, 언마운트(조건부 렌더)하면 이 블록 전체 높이가 줄어 justify-center가
+  // 다시 계산되면서 검색창 자체가 위로 움직여버린다(2026-08-20, 되돌림) — 검색창 위치는 절대
+  // 고정이어야 하므로 공간은 그대로 차지한 채 invisible로 숨긴다.
   const [searchActive, setSearchActive] = useState(false)
 
   return (
@@ -21,24 +23,24 @@ export function HomePage() {
         <SearchBar presetQuery={preset} onActiveChange={setSearchActive} />
       </div>
 
-      {!searchActive && (
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-          {EXAMPLE_COMMANDS.map((cmd) => (
-            <button
-              key={cmd.path.join('/')}
-              type="button"
-              onClick={() => setPreset({ path: cmd.path, operands: cmd.operands })}
-              className="flex items-center gap-2 rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm text-foreground/90 transition-colors hover:bg-surface-raised"
-            >
-              <span>{cmd.icon}</span>
-              <span>
-                <span className="text-muted">/</span>
-                {cmd.path.join('/')} <span className="text-muted">{cmd.operands.join(' ')}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        className={`mt-12 flex flex-wrap items-center justify-center gap-3 ${searchActive ? 'invisible' : ''}`}
+      >
+        {EXAMPLE_COMMANDS.map((cmd) => (
+          <button
+            key={cmd.path.join('/')}
+            type="button"
+            onClick={() => setPreset({ path: cmd.path, operands: cmd.operands })}
+            className="flex items-center gap-2 rounded-full border border-hairline bg-surface px-4 py-2.5 text-sm text-foreground/90 transition-colors hover:bg-surface-raised"
+          >
+            <span>{cmd.icon}</span>
+            <span>
+              <span className="text-muted">/</span>
+              {cmd.path.join('/')} <span className="text-muted">{cmd.operands.join(' ')}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
