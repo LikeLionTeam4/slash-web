@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar'
 import { SettingsDialog } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
 import { ShortcutsDialog } from './ShortcutsDialog'
+import { OnboardingDialog } from './OnboardingDialog'
 import { useAppearance } from '../hooks/appearanceContext'
 import { AgentStatusProvider } from '../hooks/agentStatusContext'
 import { CurrentUserProvider } from '../hooks/currentUserContext'
@@ -13,12 +14,21 @@ import { DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId, type SettingsCategoryI
 const SETTINGS_HASH_PREFIX = '#settings/'
 const GUIDE_HASH = '#guide'
 const SHORTCUTS_HASH = '#shortcuts'
+const ONBOARDING_STORAGE_KEY = 'slash-onboarding-seen'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { theme, setTheme, fontSize, setFontSize } = useAppearance()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+
+  // 백엔드에 "온보딩 봤음" 상태를 둘 필요가 없어서 localStorage로만 판단한다 — 계정이 아니라
+  // 이 브라우저 기준 1회다(OnboardingDialog.tsx 주석 참고).
+  const [onboardingOpen, setOnboardingOpen] = useState(() => !localStorage.getItem(ONBOARDING_STORAGE_KEY))
+  const dismissOnboarding = () => {
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, '1')
+    setOnboardingOpen(false)
+  }
 
   const settingsCategoryRaw = location.hash.startsWith(SETTINGS_HASH_PREFIX)
     ? location.hash.slice(SETTINGS_HASH_PREFIX.length)
@@ -81,6 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
         {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
+        {onboardingOpen && <OnboardingDialog onClose={dismissOnboarding} />}
       </div>
       </CurrentUserProvider>
     </AgentStatusProvider>

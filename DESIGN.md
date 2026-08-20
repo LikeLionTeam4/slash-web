@@ -56,7 +56,7 @@ tokens:
     light-mode-use: "A soft, low-opacity multi-stop radial wash across the page background (see components.page-background-light), in addition to the same shape/line uses as dark."
   typography:
     family: { ui: "Pretendard Variable", fallback: "-apple-system, system-ui, Segoe UI, Roboto, sans-serif" }
-    display: { size: 40, weight: 700, lineHeight: 1.25, use: "Hero heading ('무엇을 도와드릴까요, 사장님?')" }
+    display: { size: 40, weight: 700, lineHeight: 1.25, use: "Hero heading ('사장님, 무엇을 도와드릴까요?')" }
     body: { size: 16, weight: 400, lineHeight: 1.6, use: "Hero subheading, feature descriptions" }
     control: { size: 15, weight: 500, lineHeight: 1.4, use: "Search input, chips, buttons" }
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, 3xl: 48 }
@@ -139,8 +139,8 @@ Family: **Pretendard Variable** (fallback `-apple-system, system-ui, Segoe UI, R
 
 | Role | Size | Weight | Line height | Use |
 |---|---:|---:|---:|---|
-| Hero heading | 40px | 700 | 1.25 | "무엇을 도와드릴까요, 사장님?" |
-| Hero subheading | 16px | 400 | 1.6 | "파일·웹 검색, 생성형 AI, PC 제어까지 한 번에." |
+| Hero heading | 40px | 700 | 1.25 | "사장님, 무엇을 도와드릴까요?" |
+| ~~Hero subheading~~ | 16px | 400 | 1.6 | Removed 2026-08-20 (§10) — token still exists (feature descriptions reuse the same size), just no longer used for a hero-level line |
 | Control (input/chips/buttons) | 15px | 500 | 1.4 | Search input text, chip labels |
 | Feature title | 16px | 600 | 1.4 | "웹 검색" / "AI 답변" / "안전한 검색" |
 | Feature description | 14px | 400 | 1.5 | Muted one-line support copy |
@@ -177,11 +177,9 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
   - This keeps the "two modes, one box" principle (§12.2) — still one input, no form panel — and reuses the in-bar pill idea from the attachment row.
 - **Submit (2026-07-30, extended 2026-07-31):** until 2026-07-30 the submit button and Enter did nothing at all — there was no submit path in the component. It exists for the deep-link commands only — `/네이버`, `/네이버/지도`, and `/구글` open a new tab (see §9). Everything else — free-text and every other command — still has no submit action, so don't read the button's presence as "every input submits somewhere." Because these hand the user off to another site, their helper text replaces the generic 명령어-모드 line and says so up front, in `accent-blue`: "새 탭에서 네이버 검색으로 열려요." / "새 탭에서 네이버 지도 검색으로 열려요." / "새 탭에서 구글 검색으로 열려요."
 
-**Suggestion Chip**
-- Shape: full pill, `padding: 10px 16px`, `gap: 8px` between icon and label.
-- Background `#14172a`, `1px solid rgba(255,255,255,0.08)` border.
-- Leading icon: small (≈20px) colored badge/emoji specific to the example (e.g. a tech-stack logo for a dev question, a plane for a travel question) — chips double as a gallery of "things you can ask."
-- Label is prefixed with a muted `/`, echoing the input's own leading glyph even though these are example free-text queries, not literal commands.
+**Suggestion Chip — removed (2026-08-20).** The home-screen example chip row (below the search bar) was cut, not just hidden — replaced by the one-time **Onboarding Dialog** below. Reasoning in the 2026-08-20 changelog entries: the chip row read as visually busy on its own, and it kept colliding with the search bar's absolute result/hint panel in a way that took two rounds of layout fixes (see the `justify-center`/`invisible` entries) — a one-time modal sidesteps both problems since it never shares layout space with the search bar. Kept here for history: full pill, `padding: 10px 16px`, `gap: 8px` between icon and label, background `#14172a`, `1px solid rgba(255,255,255,0.08)` border, small (≈20px) leading icon/emoji per example, label prefixed with a muted `/`. `src/lib/exampleCommands.ts` (the data file) was deleted along with it — if this ever comes back, it existed in git history before this revision.
+
+**Onboarding Dialog (2026-08-20)** — same overlay pattern as Settings/명령어 가이드/단축키 (`fixed inset-0 bg-black/50`, click-outside-to-close), but not hash-routed since it isn't user-triggered: `AppShell` opens it automatically on mount if `localStorage['slash-onboarding-seen']` is unset, and any dismissal (✕, backdrop click, or the "시작하기" button) sets that key so it never shows again on that browser. Deliberately account-agnostic (a backend "has this user seen onboarding" field was considered and rejected — see the chat log; a new browser/incognito window just sees it again, which is an acceptable trade for not touching slash-api). Content is intentionally short: one line explaining free-text vs. `/`-command mode, no illustration, no multi-step tour — this replaces the example chips as the onboarding surface, but stays a single screen rather than growing into a dedicated tutorial route (rejected as more than the actual problem — a low-traffic new-user gap — warranted).
 
 **Feature Badge + Column** (3-up row: 웹 검색 / AI 답변 / 안전한 검색)
 - Icon sits in a circular badge, ~56px, background = accent color at ~14% opacity, icon stroke = the accent color itself (blue/purple/green respectively).
@@ -222,7 +220,7 @@ Numbers/labels stay left-aligned inside components; hero copy is center-aligned 
 
 ## 5. Layout Principles
 
-- **App shell**: fixed-height sidebar (§4) + a flex-1 scrollable main pane. The main pane **vertically centers** its content (2026-07-30, matches the reference's greeting+input block sitting mid-viewport rather than pinned to the top) — single column, horizontally centered: gradient glyph + heading (inline, one row) → subheading → search bar → suggestion chips → feature row. No "scroll for more" hint — removed at the user's request (2026-07-29); the feature row is the natural end of the page, not a teaser for more content below.
+- **App shell**: fixed-height sidebar (§4) + a flex-1 scrollable main pane. The home screen's content sits in a single column, horizontally centered: heading → search bar. (A subheading and, before that, suggestion chips used to close out this column — both removed 2026-08-20, see §10 and §4 Suggestion Chip.) No "scroll for more" hint — removed at the user's request (2026-07-29); the search bar is the natural end of the page, not a teaser for more content below. **Measured-once top offset, not live `justify-center` (2026-08-20, revised twice from the original vertically-centered layout below)**: true vertical centering recomputes on every height change, and a multi-line search bar (Shift+Enter) growing taller changed the block's total height often enough that the heading and search bar visibly shifted position on screen every time — the search bar growing taller is expected and fine, but *where it sits* moving is not, and the group (heading+search bar — the subheading it also included at the time was itself cut later the same day, see §10) still has to actually sit centered, not just approximately. First pass used a guessed fixed `pt-[15vh]`, which stopped the shifting but wasn't a real center. `HomePage` now measures the group's natural (idle) height with a ref in a `useLayoutEffect` that runs once on mount, computes `(container height − group height) / 2`, and applies that as the group's own `paddingTop` — exact centering for the idle state, frozen thereafter so later growth only extends downward. (An intermediate fix kept the [now-removed] suggestion chips mounted-but-`invisible` while the search bar was active, to reserve their layout space without moving anything — superseded once the chips themselves were cut.) The original 2026-07-30 decision (`main` vertically centers, matching a reference screenshot's greeting+input block sitting mid-viewport) is superseded by this — positional stability wins over live recentering once content height became genuinely dynamic, but the *measured* offset still delivers the original "sits centered" intent for the state that matters (idle, first paint).
 - Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48px — matches the observed gaps between the hero block, input, chip row, and feature row.
 - Radius scale: 8px (small controls) / 12–16px (badges) / 28px (search bar, see §4) / full-pill (chips, submit button). Don't use Tailwind's bare `rounded-md`/`rounded-sm` defaults (6px/4px) since they fall outside this scale — use the arbitrary-value form (e.g. `rounded-[8px]`) to stay on-token.
 - No responsive/breakpoint evidence in the reference; treat mobile layout as unspecified and design it conservatively (stack the 3-column feature row, keep the search bar full-pill, and the sidebar likely wants to become an overlay/drawer rather than push content — not yet built) rather than inventing a breakpoint system.
@@ -268,14 +266,25 @@ When building Slash UI: flat canvas (dark navy or light near-white per active th
 
 ## 10. Voice & Tone
 
-Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" / "How can I help, boss?"). The hero heading was briefly "무엇이든 말해보세요." (2026-07-30) — chosen over "검색하세요" since "검색하세요" presumes a known query and Slash also covers the case where the user doesn't know exactly what to search for yet — then changed again the same day to a nickname-greeting form once the gradient glyph was pulled out of the H1; the reasoning about "말하다 not 검색하다" still holds for whatever the exact heading wording is. The example queries mix developer topics (Kubernetes, Spring Boot) with everyday ones (weather, travel), so voice should read as competent-but-approachable — helpful to both technical and non-technical users, never jargon-gatekeeping.
+Korean-first copy, short and direct ("사장님, 무엇을 도와드릴까요?" / "Boss, how can I help?"). The hero heading was briefly "무엇이든 말해보세요." (2026-07-30) — chosen over "검색하세요" since "검색하세요" presumes a known query and Slash also covers the case where the user doesn't know exactly what to search for yet — then changed again the same day to a nickname-greeting form once the gradient glyph was pulled out of the H1; the reasoning about "말하다 not 검색하다" still holds for whatever the exact heading wording is. The greeting's word order flipped again 2026-08-20 (name-first, "사장님, ...?" instead of "..., 사장님?") to match natural Korean address order — see the entry below. The example queries mix developer topics (Kubernetes, Spring Boot) with everyday ones (weather, travel), so voice should read as competent-but-approachable — helpful to both technical and non-technical users, never jargon-gatekeeping.
 
 ### Do
-- Keep primary CTAs and headlines short, direct, and outcome-first ("무엇을 도와드릴까요, 사장님?", not "저희 서비스로 검색해보세요").
+- Keep primary CTAs and headlines short, direct, and outcome-first ("사장님, 무엇을 도와드릴까요?", not "저희 서비스로 검색해보세요").
 - Let example/suggestion copy be genuinely specific (real tool names, real questions), not generic placeholders.
 
 ### Don't
 - Don't pad reassurance copy ("안전한 검색" / "개인정보는 안전하게") with vague marketing language — keep it as short and concrete as the reference.
+
+### 홈 화면 부제 삭제 — 자비스 컨셉 (2026-08-20)
+
+프로젝트 컨셉이 "아이언맨의 자비스 같은 비서"라는 걸 확인하고, 홈 화면 부제("파일·웹 검색,
+생성형 AI, PC 제어까지 한 번에.")를 뺐다. 문구 자체는 §11 브랜드 내러티브를 정확히 요약하고
+있었지만, 톤이 문제였다 — 자비스는 "저는 파일 검색과 PC 제어가 가능합니다"라고 스스로를
+설명하지 않는다. 바로 위 인사말("{이름}님, 무엇을 도와드릴까요?")이 이미 "비서가 나에게 말을
+거는" 관계를 만들어놓는데, 부제가 곧바로 기능 나열형 스펙 카탈로그 톤으로 되돌려버렸다. 능력
+안내는 입력창 placeholder·사이드바 명령어 가이드·온보딩 다이얼로그(§4)가 나눠서 이미 하고
+있어서, 인사말 하나만 남겨도 정보 공백은 없다. 교훈: 카피가 브랜드 내러티브와 사실관계는
+맞아도, 그 화면에서 "누가 말하는 톤인지"와 안 맞으면 다시 봐야 한다.
 
 ### 결과 응답 스타일 (Task Result Voice, 2026-08-20)
 
@@ -299,6 +308,8 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 ## 11. Brand Narrative
 
 Slash (`/`) is an AI agent product: users interact through natural language or explicit `/` slash-commands to search files and the web, invoke generative AI, and control the local PC. The `/` is simultaneously the product's name, its logo, and its literal command trigger — the brand mark and the product mechanic are the same symbol.
+
+**Reference point (2026-08-20):** the project concept is an Iron Man-Jarvis-style personal assistant — an ever-present "someone" you talk to, not a dashboard of features you learn to operate. Practically this means copy and interaction design should favor an assistant speaking to and acting for the user ("{이름}님, 무엇을 도와드릴까요?") over enumerating what the product can do; see §10 "홈 화면 부제 삭제" for a concrete case where this called for cutting copy rather than adding it.
 
 ## 12. Principles
 
@@ -368,6 +379,16 @@ Treat this section as a starting default, not verified brand motion.
 **Revised again:** 2026-08-20 (later same day) — dropped the full-pill idle shape (§2/§4/§5): with the two-row toolbar split and command-path chips landed earlier this session, an empty/idle search bar could still grow taller than a single line (chips, multi-line Shift+Enter content) while keeping the full-pill radius, and the exaggerated curvature at that height read as cluttered rather than calm. The search bar now stays the 28px rounded rectangle (previously the attachments-only shape) at every state; chips and the submit button keep their own full-pill shape, unaffected.
 
 **Revised again:** 2026-08-20 (later same day) — `WeatherResultCard`(`SearchBar.tsx`)가 라벨:값 나열만 보여주던 걸, 값을 자연어 한 문장으로 합쳐 먼저 보여주도록 바꿨다("서울은 지금 22°, 맑음이에요. 체감은 21°이고, 습도는 60%..."). 조사는 `withObjectParticle`과 같은 방식으로 계산하는 `withTopicParticle`/`withCopula`를 새로 추가해 하드코딩하지 않았다. 이 패턴을 앞으로의 모든 task 결과·LLM 답변이 따라야 할 기본형으로 §10에 "결과 응답 스타일" 절로 문서화했다 — 지금은 날씨 하나뿐이지만 `TEXT_SUMMARY`와 이후 자유입력 LLM 답변에도 같은 틀(문장이 먼저, 구조화된 상세는 그 아래)을 쓸 계획.
+
+**Revised again:** 2026-08-20 (later still) — the home screen's example chips (below the search bar, normal flow) started visibly overlapping with the search bar's own suggestion/hint/result panel (`absolute`, §4 "Below-pill panels") once the weather result card (§10) made that panel tall enough to reach them. Rather than reverting the absolute-overlay fix (still needed to avoid re-centering the hero on every panel toggle), `SearchBar` now reports its own `active` state (focused/has-text/command-mode — the same flag already driving the gradient focus ring) via an `onActiveChange` callback. First attempt had `HomePage` conditionally *unmount* the chips while active, which fixed the overlap but broke something more important: the search bar's own on-screen position is supposed to be fixed — growing taller (multi-line content, command chips) is fine, but the hero block being vertically centered (§5) meant removing the chips row shrank the total block height and re-centered it, visibly moving the search bar itself. Fixed by keeping the chips mounted and toggling Tailwind's `invisible` instead (`visibility: hidden`, non-interactive) — the row keeps its layout space at all times, so hiding it changes nothing about the block's total height or the search bar's position.
+
+**Revised again:** 2026-08-20 (later still) — the `invisible`-chips fix above stopped the *chip row* from moving the search bar, but the search bar itself still shifted: `justify-center` (§5) recenters the whole heading+search bar+chips block on every height change, and a multi-line search bar (Shift+Enter) growing taller was exactly that kind of change. The request was explicit — the search bar growing vertically is fine, the search bar's on-screen *position* changing is not. First fix dropped `justify-center` for a guessed fixed `pt-[15vh]` top offset. Follow-up feedback the same day: the heading+search bar group needs to actually *be* centered as a unit, not just approximately placed — so `pt-[15vh]` became a one-time *measured* offset instead (§5 App shell), computed from the group's real idle height in a `useLayoutEffect` that runs once on mount.
+
+**Revised again:** 2026-08-20 (later still) — removed the home-screen example chips entirely (§4 Suggestion Chip) instead of continuing to fight their layout interactions with the search bar, and replaced them with a one-time **Onboarding Dialog** (§4) gated on `localStorage['slash-onboarding-seen']` — explicitly frontend-only (no backend "seen" field) at the user's request, so it's per-browser, not per-account. `src/lib/exampleCommands.ts` was deleted; `SearchBar`'s `onActiveChange` prop (added earlier the same day solely for the chip-overlap fix) was removed as dead code along with it.
+
+**Revised again:** 2026-08-20 (later still) — removed the home screen's hero subheading ("파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.") after confirming the project's concept is a Jarvis-style personal assistant (§11): the line was factually accurate but read as a feature list, undercutting the "assistant speaking to you" tone the greeting above it (H1) already established. Left just the greeting; capability discovery already lives in the placeholder text, sidebar command guide, and the same-day Onboarding Dialog, so nothing was lost. §3's typography table keeps the now-unused "Hero subheading" row struck through rather than deleted, for history.
+
+**Revised again:** 2026-08-20 (later still) — flipped the greeting's word order from "무엇을 도와드릴까요, {이름}님?" to "{이름}님, 무엇을 도와드릴까요?" — leading with the name/title is the natural Korean address order (cf. "고객님, 무엇을 도와드릴까요?", standard service-counter phrasing), whereas the trailing-name form read as a direct carryover of English syntax ("How can I help, sir?"). Also reads slightly more like the assistant is addressing the user first (§11 Jarvis reference point) rather than asking a question and tagging their name on after.
 
 **Superseded bootstrap material:** this project was first bootstrapped from a claude-style test reference, then pivoted to Slash's own brand on 2026-07-29. Those two files (`DESIGN_DEPRECATED.md`, `DESIGN_DEPRECATED_claude.md`) were deleted on 2026-07-30 — a competing palette sitting in the repo root was more likely to be grepped by mistake than to be useful. They remain in git history at commit `0ea4bd1` if ever needed.
 
