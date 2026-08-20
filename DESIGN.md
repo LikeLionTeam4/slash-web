@@ -56,7 +56,7 @@ tokens:
     light-mode-use: "A soft, low-opacity multi-stop radial wash across the page background (see components.page-background-light), in addition to the same shape/line uses as dark."
   typography:
     family: { ui: "Pretendard Variable", fallback: "-apple-system, system-ui, Segoe UI, Roboto, sans-serif" }
-    display: { size: 40, weight: 700, lineHeight: 1.25, use: "Hero heading ('무엇을 도와드릴까요, 사장님?')" }
+    display: { size: 40, weight: 700, lineHeight: 1.25, use: "Hero heading ('사장님, 무엇을 도와드릴까요?')" }
     body: { size: 16, weight: 400, lineHeight: 1.6, use: "Hero subheading, feature descriptions" }
     control: { size: 15, weight: 500, lineHeight: 1.4, use: "Search input, chips, buttons" }
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, 3xl: 48 }
@@ -139,7 +139,7 @@ Family: **Pretendard Variable** (fallback `-apple-system, system-ui, Segoe UI, R
 
 | Role | Size | Weight | Line height | Use |
 |---|---:|---:|---:|---|
-| Hero heading | 40px | 700 | 1.25 | "무엇을 도와드릴까요, 사장님?" |
+| Hero heading | 40px | 700 | 1.25 | "사장님, 무엇을 도와드릴까요?" |
 | ~~Hero subheading~~ | 16px | 400 | 1.6 | Removed 2026-08-20 (§10) — token still exists (feature descriptions reuse the same size), just no longer used for a hero-level line |
 | Control (input/chips/buttons) | 15px | 500 | 1.4 | Search input text, chip labels |
 | Feature title | 16px | 600 | 1.4 | "웹 검색" / "AI 답변" / "안전한 검색" |
@@ -266,10 +266,10 @@ When building Slash UI: flat canvas (dark navy or light near-white per active th
 
 ## 10. Voice & Tone
 
-Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" / "How can I help, boss?"). The hero heading was briefly "무엇이든 말해보세요." (2026-07-30) — chosen over "검색하세요" since "검색하세요" presumes a known query and Slash also covers the case where the user doesn't know exactly what to search for yet — then changed again the same day to a nickname-greeting form once the gradient glyph was pulled out of the H1; the reasoning about "말하다 not 검색하다" still holds for whatever the exact heading wording is. The example queries mix developer topics (Kubernetes, Spring Boot) with everyday ones (weather, travel), so voice should read as competent-but-approachable — helpful to both technical and non-technical users, never jargon-gatekeeping.
+Korean-first copy, short and direct ("사장님, 무엇을 도와드릴까요?" / "Boss, how can I help?"). The hero heading was briefly "무엇이든 말해보세요." (2026-07-30) — chosen over "검색하세요" since "검색하세요" presumes a known query and Slash also covers the case where the user doesn't know exactly what to search for yet — then changed again the same day to a nickname-greeting form once the gradient glyph was pulled out of the H1; the reasoning about "말하다 not 검색하다" still holds for whatever the exact heading wording is. The greeting's word order flipped again 2026-08-20 (name-first, "사장님, ...?" instead of "..., 사장님?") to match natural Korean address order — see the entry below. The example queries mix developer topics (Kubernetes, Spring Boot) with everyday ones (weather, travel), so voice should read as competent-but-approachable — helpful to both technical and non-technical users, never jargon-gatekeeping.
 
 ### Do
-- Keep primary CTAs and headlines short, direct, and outcome-first ("무엇을 도와드릴까요, 사장님?", not "저희 서비스로 검색해보세요").
+- Keep primary CTAs and headlines short, direct, and outcome-first ("사장님, 무엇을 도와드릴까요?", not "저희 서비스로 검색해보세요").
 - Let example/suggestion copy be genuinely specific (real tool names, real questions), not generic placeholders.
 
 ### Don't
@@ -280,7 +280,7 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 프로젝트 컨셉이 "아이언맨의 자비스 같은 비서"라는 걸 확인하고, 홈 화면 부제("파일·웹 검색,
 생성형 AI, PC 제어까지 한 번에.")를 뺐다. 문구 자체는 §11 브랜드 내러티브를 정확히 요약하고
 있었지만, 톤이 문제였다 — 자비스는 "저는 파일 검색과 PC 제어가 가능합니다"라고 스스로를
-설명하지 않는다. 바로 위 인사말("무엇을 도와드릴까요, {이름}님?")이 이미 "비서가 나에게 말을
+설명하지 않는다. 바로 위 인사말("{이름}님, 무엇을 도와드릴까요?")이 이미 "비서가 나에게 말을
 거는" 관계를 만들어놓는데, 부제가 곧바로 기능 나열형 스펙 카탈로그 톤으로 되돌려버렸다. 능력
 안내는 입력창 placeholder·사이드바 명령어 가이드·온보딩 다이얼로그(§4)가 나눠서 이미 하고
 있어서, 인사말 하나만 남겨도 정보 공백은 없다. 교훈: 카피가 브랜드 내러티브와 사실관계는
@@ -309,7 +309,7 @@ Korean-first copy, short and direct ("무엇을 도와드릴까요, 사장님?" 
 
 Slash (`/`) is an AI agent product: users interact through natural language or explicit `/` slash-commands to search files and the web, invoke generative AI, and control the local PC. The `/` is simultaneously the product's name, its logo, and its literal command trigger — the brand mark and the product mechanic are the same symbol.
 
-**Reference point (2026-08-20):** the project concept is an Iron Man-Jarvis-style personal assistant — an ever-present "someone" you talk to, not a dashboard of features you learn to operate. Practically this means copy and interaction design should favor an assistant speaking to and acting for the user ("무엇을 도와드릴까요, {이름}님?") over enumerating what the product can do; see §10 "홈 화면 부제 삭제" for a concrete case where this called for cutting copy rather than adding it.
+**Reference point (2026-08-20):** the project concept is an Iron Man-Jarvis-style personal assistant — an ever-present "someone" you talk to, not a dashboard of features you learn to operate. Practically this means copy and interaction design should favor an assistant speaking to and acting for the user ("{이름}님, 무엇을 도와드릴까요?") over enumerating what the product can do; see §10 "홈 화면 부제 삭제" for a concrete case where this called for cutting copy rather than adding it.
 
 ## 12. Principles
 
@@ -387,6 +387,8 @@ Treat this section as a starting default, not verified brand motion.
 **Revised again:** 2026-08-20 (later still) — removed the home-screen example chips entirely (§4 Suggestion Chip) instead of continuing to fight their layout interactions with the search bar, and replaced them with a one-time **Onboarding Dialog** (§4) gated on `localStorage['slash-onboarding-seen']` — explicitly frontend-only (no backend "seen" field) at the user's request, so it's per-browser, not per-account. `src/lib/exampleCommands.ts` was deleted; `SearchBar`'s `onActiveChange` prop (added earlier the same day solely for the chip-overlap fix) was removed as dead code along with it.
 
 **Revised again:** 2026-08-20 (later still) — removed the home screen's hero subheading ("파일·웹 검색, 생성형 AI, PC 제어까지 한 번에.") after confirming the project's concept is a Jarvis-style personal assistant (§11): the line was factually accurate but read as a feature list, undercutting the "assistant speaking to you" tone the greeting above it (H1) already established. Left just the greeting; capability discovery already lives in the placeholder text, sidebar command guide, and the same-day Onboarding Dialog, so nothing was lost. §3's typography table keeps the now-unused "Hero subheading" row struck through rather than deleted, for history.
+
+**Revised again:** 2026-08-20 (later still) — flipped the greeting's word order from "무엇을 도와드릴까요, {이름}님?" to "{이름}님, 무엇을 도와드릴까요?" — leading with the name/title is the natural Korean address order (cf. "고객님, 무엇을 도와드릴까요?", standard service-counter phrasing), whereas the trailing-name form read as a direct carryover of English syntax ("How can I help, sir?"). Also reads slightly more like the assistant is addressing the user first (§11 Jarvis reference point) rather than asking a question and tagging their name on after.
 
 **Superseded bootstrap material:** this project was first bootstrapped from a claude-style test reference, then pivoted to Slash's own brand on 2026-07-29. Those two files (`DESIGN_DEPRECATED.md`, `DESIGN_DEPRECATED_claude.md`) were deleted on 2026-07-30 — a competing palette sitting in the repo root was more likely to be grepped by mistake than to be useful. They remain in git history at commit `0ea4bd1` if ever needed.
 
