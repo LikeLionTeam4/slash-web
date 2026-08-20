@@ -26,24 +26,10 @@ import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { ApiError } from '../lib/apiClient'
-import {
-  createTaskRequest,
-  getTask,
-  isTerminalTaskStatus,
-  type FileSearchResult,
-  type SystemStatusResult,
-  type TaskStatus,
-  type TextSummaryResult,
-  type WeatherLookupResult,
-} from '../lib/tasks'
+import { createTaskRequest, type TaskStatus } from '../lib/tasks'
 import {
   withObjectParticle,
-  WeatherResultCard,
-  TextSummaryResultCard,
-  SystemStatusResultCard,
-  FileSearchResultList,
   TASK_STATUS_LABELS,
-  taskErrorMessage,
   LoadingIndicator,
 } from '../lib/taskResultRenderers'
 
@@ -95,29 +81,21 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
   )
 }
 
-type StatusTaskState =
-  | { phase: 'idle' }
-  | { phase: 'running'; status: TaskStatus }
-  | { phase: 'done'; result: SystemStatusResult }
-  | { phase: 'failed'; message: string }
+// 접수(POST /requests)에 성공하는 순간 taskId로 /chat/{taskId}로 이동한다 — 결과는 그 화면이
+// 폴링해서 보여준다. 그래서 여기 상태는 "접수 자체가 됐는지"만 추적하면 되고, 결과 phase('done')는
+// 없다.
+type StatusTaskState = { phase: 'idle' } | { phase: 'running'; status: TaskStatus } | { phase: 'failed'; message: string }
 
 type FileSearchTaskState =
   | { phase: 'idle' }
   | { phase: 'running'; status: TaskStatus }
-  | { phase: 'done'; result: FileSearchResult }
   | { phase: 'failed'; message: string }
 
-// 자유 텍스트는 /상태·/파일과 달리 taskType을 NLU가 그때그때 정한다(WEATHER_LOOKUP,
-// TEXT_SUMMARY 등) — taskType과 함께 들고 있다가 화면에서 그 타입에 맞는 카드로 렌더링한다.
-// 알려진 타입이 아니면(예: FILE_SEARCH가 자유입력으로 잘못 분류된 경우) raw JSON으로 폴백한다.
 type FreeTextTaskState =
   | { phase: 'idle' }
   | { phase: 'running'; status: TaskStatus }
-  | { phase: 'needsClarification'; question: string | null }
-  | { phase: 'done'; taskType: string | null; result: unknown }
   | { phase: 'failed'; message: string }
 
-const STATUS_POLL_INTERVAL_MS = 2000
 // 입력창이 가로로 무한히 늘어나지 않도록 세로 auto-resize의 상한 — 대략 8줄.
 const TEXTAREA_MAX_HEIGHT_PX = 192
 
@@ -143,16 +121,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   // 들고 있다가 백엔드에도 따로 보낸다.
   const [commandMode, setCommandMode] = useState<{ path: string[]; operands: string[] } | null>(null)
   const [statusTask, setStatusTask] = useState<StatusTaskState>({ phase: 'idle' })
-  const statusPollTimeoutRef = useRef<number | null>(null)
   const [fileSearchTask, setFileSearchTask] = useState<FileSearchTaskState>({ phase: 'idle' })
-  const fileSearchPollTimeoutRef = useRef<number | null>(null)
-  // 검색 도중 쿼리를 바꿔 새 검색이 시작되면, 그 사이 도착하는 이전 검색의 폴링 응답은 버려야
-  // 한다 — 아니면 방금 친 쿼리 화면에 직전 쿼리의 결과가 덮어써진다.
-  const fileSearchTaskIdRef = useRef<string | null>(null)
   const [freeTextTask, setFreeTextTask] = useState<FreeTextTaskState>({ phase: 'idle' })
-  const freeTextPollTimeoutRef = useRef<number | null>(null)
-  // 파일 검색과 같은 이유 — 편집 중 새로 제출하면 그 사이 도착하는 이전 제출의 폴링 응답은 버린다.
-  const freeTextTaskIdRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
@@ -252,39 +222,29 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`
   }, [value])
 
-  // 쿼리를 고치면 끝난 검색 결과/에러는 지운다 — 진행 중인 검색은 그대로 두고(중복 요청은
-  // Enter 쪽에서 막는다) 끝난 뒤에야 다음 입력에 반응한다.
+  // 쿼리를 고치면 끝난 에러는 지운다 — 진행 중(접수 요청이 나간 상태)인 건 그대로 두고(중복 요청은
+  // Enter 쪽에서 막는다) 접수가 끝난 뒤에야 다음 입력에 반응한다.
   useEffect(() => {
-    setFileSearchTask((prev) => (prev.phase === 'done' || prev.phase === 'failed' ? { phase: 'idle' } : prev))
+    setFileSearchTask((prev) => (prev.phase === 'failed' ? { phase: 'idle' } : prev))
   }, [value])
 
-  // 자유 텍스트도 같은 이유로 — 쿼리를 고치면 끝난 결과/에러만 지우고, 진행 중인 요청은 그대로 둔다.
+  // 자유 텍스트도 같은 이유로.
   useEffect(() => {
-    setFreeTextTask((prev) => (prev.phase === 'done' || prev.phase === 'failed' ? { phase: 'idle' } : prev))
+    setFreeTextTask((prev) => (prev.phase === 'failed' ? { phase: 'idle' } : prev))
   }, [value])
 
-  // 자유 텍스트 모드를 벗어나면(명령어로 바꾸거나 입력을 지우면) 진행 중이던 폴링도 함께 멈춘다.
+  // 자유 텍스트 모드를 벗어나면(명령어로 바꾸거나 입력을 지우면) 상태를 초기화한다.
   // /날씨처럼 딥링크 없는 단일 값 명령(isGenericCommand)도 같은 freeTextTask를 빌려 쓰므로
   // 그 모드에 있는 동안에는 여기서 지우면 안 된다.
   useEffect(() => {
     if (isFreeText || isGenericCommand) return
-    if (freeTextPollTimeoutRef.current !== null) {
-      clearTimeout(freeTextPollTimeoutRef.current)
-      freeTextPollTimeoutRef.current = null
-    }
-    freeTextTaskIdRef.current = null
     setFreeTextTask({ phase: 'idle' })
   }, [isFreeText, isGenericCommand])
 
-  // 파일 검색 모드를 벗어나면(다른 명령으로 바꾸거나 명령어 자체를 지우면) 진행 중이던 폴링도
-  // 함께 멈춘다 — /상태 쪽의 같은 목적 effect와 동일한 이유.
+  // 파일 검색 모드를 벗어나면(다른 명령으로 바꾸거나 명령어 자체를 지우면) 상태를 초기화한다 —
+  // /상태 쪽의 같은 목적 effect와 동일한 이유.
   useEffect(() => {
     if (commandMode?.path[0] === '파일') return
-    if (fileSearchPollTimeoutRef.current !== null) {
-      clearTimeout(fileSearchPollTimeoutRef.current)
-      fileSearchPollTimeoutRef.current = null
-    }
-    fileSearchTaskIdRef.current = null
     setFileSearchTask({ phase: 'idle' })
   }, [commandMode])
 
@@ -307,25 +267,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
   }, [modelPickerActive])
 
-  // /status를 벗어나면(입력을 지우거나 다른 명령으로 바꾸면) 진행 중이던 폴링도 함께 멈춘다 —
-  // 안 그러면 화면에 없는 패널을 위해 계속 GET /api/v1/tasks/{taskId}를 부르게 된다.
+  // /status를 벗어나면(입력을 지우거나 다른 명령으로 바꾸면) 상태를 초기화한다.
   useEffect(() => {
     if (showStatusCommand) return
-    if (statusPollTimeoutRef.current !== null) {
-      clearTimeout(statusPollTimeoutRef.current)
-      statusPollTimeoutRef.current = null
-    }
     setStatusTask({ phase: 'idle' })
   }, [showStatusCommand])
-
-  // 언마운트 시에도 폴링 타이머를 남기지 않는다.
-  useEffect(() => {
-    return () => {
-      if (statusPollTimeoutRef.current !== null) clearTimeout(statusPollTimeoutRef.current)
-      if (fileSearchPollTimeoutRef.current !== null) clearTimeout(fileSearchPollTimeoutRef.current)
-      if (freeTextPollTimeoutRef.current !== null) clearTimeout(freeTextPollTimeoutRef.current)
-    }
-  }, [])
 
   // /모델/검색 stops being the active command (query cleared, chain changed, etc.) — collapse
   // the inline "모델 변경" picker so it doesn't linger open under a different panel next time.
@@ -391,39 +337,15 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     window.setTimeout(() => setKeyboardPressed(false), 150)
   }
 
-  /** POST /api/v1/requests → GET /api/v1/tasks/{taskId} 2초 폴링 — WSS는 아직 안 붙였다(§7,
-   *  "WSS 안 붙어도 폴링만으로 화면은 정상 동작"이 계약이라 당장은 이걸로 충분하다). */
-  function pollStatusTask(taskId: string) {
-    getTask(taskId)
-      .then((task) => {
-        if (task.status === 'SUCCEEDED') {
-          setStatusTask({ phase: 'done', result: task.result as SystemStatusResult })
-          return
-        }
-        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-          setStatusTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
-          return
-        }
-        setStatusTask({ phase: 'running', status: task.status })
-        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-      .catch(() => {
-        // 폴링 중 일시적 오류는 다음 주기에 다시 시도한다 — Task 자체는 서버에 이미 접수돼 있다.
-        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-  }
-
+  // POST /api/v1/requests로 접수되는 즉시 /chat/{taskId}로 이동한다 — 결과는 그 화면이 폴링해서
+  // 보여준다(taskResultRenderers.tsx가 SearchBar와 공유). 그래서 여기서는 접수 자체가 실패했을
+  // 때(네트워크 오류 등, taskId조차 못 받은 경우)만 인라인으로 알려준다.
   async function runStatusCommand() {
     if (statusTask.phase === 'running') return
     setStatusTask({ phase: 'running', status: 'ANALYZING' })
     try {
       const created = await createTaskRequest('/상태')
-      if (isTerminalTaskStatus(created.status)) {
-        pollStatusTask(created.taskId) // 드물지만 접수 시점에 이미 끝난 경우 — 같은 경로로 한 번 더 조회해 result를 받는다.
-      } else {
-        statusPollTimeoutRef.current = window.setTimeout(() => pollStatusTask(created.taskId), STATUS_POLL_INTERVAL_MS)
-        setStatusTask({ phase: 'running', status: created.status })
-      }
+      navigate(`/chat/${created.taskId}`)
     } catch (err) {
       setStatusTask({
         phase: 'failed',
@@ -432,41 +354,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
   }
 
-  /** /상태와 같은 접수·폴링 패턴 — 검색할 폴더는 프론트가 고르지 않고 서버가 자동으로 고른다
-   *  (frontend-api-contract.md, slash-api PR #18). */
-  function pollFileSearchTask(taskId: string) {
-    getTask(taskId)
-      .then((task) => {
-        if (fileSearchTaskIdRef.current !== taskId) return // 그 사이 새 검색이 시작됨 — 낡은 응답은 버린다.
-        if (task.status === 'SUCCEEDED') {
-          setFileSearchTask({ phase: 'done', result: task.result as FileSearchResult })
-          return
-        }
-        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-          setFileSearchTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
-          return
-        }
-        setFileSearchTask({ phase: 'running', status: task.status })
-        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-      .catch(() => {
-        if (fileSearchTaskIdRef.current !== taskId) return
-        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-  }
-
   async function runFileSearchCommand(query: string) {
     if (fileSearchTask.phase === 'running') return
     setFileSearchTask({ phase: 'running', status: 'ANALYZING' })
     try {
       const created = await createTaskRequest(`/파일 ${query}`)
-      fileSearchTaskIdRef.current = created.taskId
-      if (isTerminalTaskStatus(created.status)) {
-        pollFileSearchTask(created.taskId)
-      } else {
-        fileSearchPollTimeoutRef.current = window.setTimeout(() => pollFileSearchTask(created.taskId), STATUS_POLL_INTERVAL_MS)
-        setFileSearchTask({ phase: 'running', status: created.status })
-      }
+      navigate(`/chat/${created.taskId}`)
     } catch (err) {
       setFileSearchTask({
         phase: 'failed',
@@ -475,47 +368,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     }
   }
 
-  /** /파일과 같은 접수·폴링 패턴 — 명령어를 조립하지 않고 입력창의 문장을 그대로 보낸다
-   *  (frontend-api-contract.md "입력창의 한 줄을 그대로 보내세요" — 슬래시 여부는 서버·NLU가 가른다). */
-  function pollFreeTextTask(taskId: string) {
-    getTask(taskId)
-      .then((task) => {
-        if (freeTextTaskIdRef.current !== taskId) return
-        if (task.status === 'SUCCEEDED') {
-          setFreeTextTask({ phase: 'done', taskType: task.taskType, result: task.result })
-          return
-        }
-        if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-          setFreeTextTask({ phase: 'failed', message: taskErrorMessage(task.errorCode) })
-          return
-        }
-        if (task.status === 'NEEDS_CLARIFICATION') {
-          // 백엔드는 correlationId로 같은 태스크를 이어가지 않는다 — 답변도 새 text로 새 요청을
-          // 보내는 구조라, 이 태스크는 더 안 바뀐다. 폴링을 멈추고 질문만 보여준다.
-          setFreeTextTask({ phase: 'needsClarification', question: task.question ?? null })
-          return
-        }
-        setFreeTextTask({ phase: 'running', status: task.status })
-        freeTextPollTimeoutRef.current = window.setTimeout(() => pollFreeTextTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-      .catch(() => {
-        if (freeTextTaskIdRef.current !== taskId) return
-        freeTextPollTimeoutRef.current = window.setTimeout(() => pollFreeTextTask(taskId), STATUS_POLL_INTERVAL_MS)
-      })
-  }
-
+  /** 명령어를 조립하지 않고 입력창의 문장을 그대로 보낸다 (frontend-api-contract.md "입력창의
+   *  한 줄을 그대로 보내세요" — 슬래시 여부는 서버·NLU가 가른다). */
   async function runFreeTextCommand(text: string) {
     if (freeTextTask.phase === 'running') return
     setFreeTextTask({ phase: 'running', status: 'ANALYZING' })
     try {
       const created = await createTaskRequest(text)
-      freeTextTaskIdRef.current = created.taskId
-      if (isTerminalTaskStatus(created.status)) {
-        pollFreeTextTask(created.taskId)
-      } else {
-        freeTextPollTimeoutRef.current = window.setTimeout(() => pollFreeTextTask(created.taskId), STATUS_POLL_INTERVAL_MS)
-        setFreeTextTask({ phase: 'running', status: created.status })
-      }
+      navigate(`/chat/${created.taskId}`)
     } catch (err) {
       setFreeTextTask({
         phase: 'failed',
@@ -1075,12 +935,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               className="px-4 py-3"
               label={TASK_STATUS_LABELS[fileSearchTask.status] ?? '검색하는 중이에요'}
             />
-          ) : fileSearchTask.phase === 'failed' ? (
-            <p className="px-4 py-3 text-sm text-accent-blue">{fileSearchTask.message}</p>
           ) : (
-            <div className="px-4 py-3">
-              <FileSearchResultList result={fileSearchTask.result} />
-            </div>
+            <p className="px-4 py-3 text-sm text-accent-blue">{fileSearchTask.message}</p>
           )}
         </div>
       )}
@@ -1092,7 +948,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             <LoadingIndicator label={TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'} />
           )}
           {statusTask.phase === 'failed' && <p className="text-sm text-accent-blue">{statusTask.message}</p>}
-          {statusTask.phase === 'done' && <SystemStatusResultCard result={statusTask.result} />}
         </div>
       )}
 
@@ -1101,26 +956,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           {freeTextTask.phase === 'running' && (
             <LoadingIndicator label={TASK_STATUS_LABELS[freeTextTask.status] ?? '처리하는 중이에요'} />
           )}
-          {freeTextTask.phase === 'needsClarification' && (
-            <div className="flex flex-col gap-1">
-              <p className="text-sm text-foreground">{freeTextTask.question ?? '추가 정보가 필요해요.'}</p>
-              <p className="text-xs text-muted">위 질문에 맞게 입력을 수정하고 Enter를 눌러주세요.</p>
-            </div>
-          )}
           {freeTextTask.phase === 'failed' && <p className="text-sm text-accent-blue">{freeTextTask.message}</p>}
-          {freeTextTask.phase === 'done' &&
-            (freeTextTask.taskType === 'WEATHER_LOOKUP' ? (
-              <WeatherResultCard result={freeTextTask.result as WeatherLookupResult} />
-            ) : freeTextTask.taskType === 'TEXT_SUMMARY' ? (
-              <TextSummaryResultCard result={freeTextTask.result as TextSummaryResult} />
-            ) : (
-              // 이슈 #34: /chat 스레드로 옮기는 대신 지금은 인라인에서 처리한다. 여기 오는 건
-              // 아직 전용 카드가 없는 taskType(자유입력이 FILE_SEARCH로 오분류된 경우 등)뿐이라
-              // raw JSON을 폴백으로 보여준다 — slash-infra 이슈 #42/슬래시-nlu 오분류 참고.
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
-                {JSON.stringify(freeTextTask.result, null, 2)}
-              </pre>
-            ))}
         </div>
       )}
 
