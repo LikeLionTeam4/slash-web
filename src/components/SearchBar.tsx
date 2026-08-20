@@ -10,8 +10,6 @@ import {
   X,
   FileText,
   ChevronDown,
-  Droplets,
-  Wind,
 } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { MicSettingsPopover } from './MicSettingsPopover'
@@ -38,6 +36,16 @@ import {
   type TextSummaryResult,
   type WeatherLookupResult,
 } from '../lib/tasks'
+import {
+  withObjectParticle,
+  WeatherResultCard,
+  TextSummaryResultCard,
+  SystemStatusResultCard,
+  FileSearchResultList,
+  TASK_STATUS_LABELS,
+  taskErrorMessage,
+  LoadingIndicator,
+} from '../lib/taskResultRenderers'
 
 function AddMenuItem({
   icon: Icon,
@@ -85,114 +93,6 @@ function OperandChip({ label, onClear }: { label: string; onClear: () => void })
       </button>
     </span>
   )
-}
-
-/** 결과를 기다리는 동안 쓰는 표시 — 제네릭 스피너 대신 브랜드 모티프인 "/"를 펄스시킨다(§7). */
-function LoadingIndicator({ label, className = '' }: { label: string; className?: string }) {
-  return (
-    <p className={`flex items-center gap-1.5 text-sm text-muted ${className}`}>
-      <span className="flex h-4 w-4 shrink-0 animate-pulse items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
-        /
-      </span>
-      {label}
-    </p>
-  )
-}
-
-/** WEATHER_LOOKUP 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
-/** 문장 안 서술어 자리에 받침 유무로 "이에요"/"예요"를 고른다 (예: "맑음"→"맑음이에요", "비"→"비예요"). */
-function withCopula(noun: string): string {
-  const code = noun.charCodeAt(noun.length - 1)
-  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
-  return `${noun}${hasFinalConsonant ? '이에요' : '예요'}`
-}
-
-/** 주격 조사 — 받침이 있으면 '은', 없으면 '는'. */
-function withTopicParticle(noun: string): string {
-  const code = noun.charCodeAt(noun.length - 1)
-  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
-  return `${noun}${hasFinalConsonant ? '은' : '는'}`
-}
-
-/** 결과값을 그대로 늘어놓지 않고 사람이 답하듯 한 문장으로 합친다 — DESIGN.md §10 "결과 응답 스타일" 참고. */
-function describeWeather(result: WeatherLookupResult): string {
-  const place = withTopicParticle(result.region || result.location)
-  const temperature = Math.round(result.temperature)
-  const apparent = Math.round(result.apparentTemperature)
-  const rainNote = result.precipitation > 0 ? ` 비도 조금 내리고 있어요 (강수량 ${result.precipitation}mm).` : ''
-  return `${place} 지금 ${temperature}°, ${withCopula(result.description)} 체감은 ${apparent}°이고, 습도는 ${result.humidity}%, 바람은 초속 ${result.windSpeed}m로 불고 있어요.${rainNote}`
-}
-
-function WeatherResultCard({ result }: { result: WeatherLookupResult }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm leading-6 text-foreground">{describeWeather(result)}</p>
-      <div className="flex items-baseline justify-between gap-3 border-t border-hairline pt-3">
-        <div>
-          <p className="text-sm text-muted">{result.region}</p>
-          <p className="text-2xl font-semibold text-foreground">{Math.round(result.temperature)}°</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-foreground">{result.description}</p>
-          <p className="text-xs text-muted">체감 {Math.round(result.apparentTemperature)}°</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-4 border-t border-hairline pt-3 text-xs text-muted">
-        <span className="flex items-center gap-1.5">
-          <Droplets size={14} />
-          습도 {result.humidity}%
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Wind size={14} />
-          풍속 {result.windSpeed}m/s
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/** TEXT_SUMMARY 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
-function TextSummaryResultCard({ result }: { result: TextSummaryResult }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="whitespace-pre-wrap text-sm text-foreground">{result.summary}</p>
-      <p className="text-xs text-muted">{result.model}이(가) 요약했어요.</p>
-    </div>
-  )
-}
-
-/** 목적격 조사 — 받침이 있으면 '을', 없으면 '를'. ('검색어를 입력' / '파일 이름을 입력') */
-function withObjectParticle(noun: string): string {
-  const code = noun.charCodeAt(noun.length - 1)
-  const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0
-  return `${noun}${hasFinalConsonant ? '을' : '를'}`
-}
-
-/** 진행 중 상태별 안내 문구 — frontend-api-contract.md §W1-04 "상태값" 표. */
-const TASK_STATUS_LABELS: Partial<Record<TaskStatus, string>> = {
-  ANALYZING: '무슨 요청인지 분석하는 중이에요',
-  QUEUED: 'PC로 보냈어요, 수락을 기다리는 중이에요',
-  RUNNING: '실행 중이에요',
-  WAITING_FOR_DEVICE: 'PC가 꺼져 있어요 — 켜지면 자동으로 실행돼요',
-  NEEDS_CLARIFICATION: '추가 정보가 필요해요',
-}
-
-/** 실패한 작업의 errorCode별 안내 — 계약서 §4 표 중 /status가 실제로 낼 수 있는 것들. */
-const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
-  DEVICE_NOT_READY: 'PC 연결 상태를 확인해주세요.',
-  DEVICE_BUSY: '다른 작업을 실행 중이에요. 잠시 후 다시 시도해주세요.',
-  TASK_TYPE_NOT_SUPPORTED: '이 PC가 지원하지 않는 기능이에요.',
-  TASK_EXPIRED: '실행 기한이 지났어요.',
-  UNRECOGNIZED_COMMAND: '요청을 알아듣지 못했어요.',
-  SEARCH_FOLDER_NOT_FOUND: 'PC의 에이전트에서 검색할 폴더를 추가해주세요.',
-  AGENT_REJECTED: 'PC가 이 요청을 받지 않았어요.',
-  AGENT_TASK_FAILED: 'PC에서 실행이 끝나지 못했어요.',
-  NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
-  UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
-}
-
-function taskErrorMessage(code: string | null): string {
-  return (code && TASK_ERROR_MESSAGES[code]) || '요청이 실패했어요.'
 }
 
 type StatusTaskState =
@@ -337,16 +237,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     !showModelSearch &&
     !showCommandModeHint &&
     !!deepLinkHintText
-  const showCommandHint =
-    !showSuggestions &&
-    !showModelPicker &&
-    !showStatusCommand &&
-    !showFileSearch &&
-    !showModelSearch &&
-    !showPlaceholderMsg &&
-    !showDeepLinkHint &&
-    !showCommandModeHint &&
-    isCommand
   const modelPickerActive = showModelPicker || (showModelSearch && modelSearchPickerOpen)
 
   useEffect(() => {
@@ -1187,25 +1077,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             />
           ) : fileSearchTask.phase === 'failed' ? (
             <p className="px-4 py-3 text-sm text-accent-blue">{fileSearchTask.message}</p>
-          ) : fileSearchTask.result.items.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-muted">일치하는 파일이 없어요.</p>
           ) : (
-            <>
-              <div className="max-h-64 overflow-y-auto">
-                {fileSearchTask.result.items.map((f) => (
-                  <div key={f.relativePath} className="flex items-center gap-2.5 px-4 py-2 text-sm">
-                    <FileText size={16} className="shrink-0 text-muted" />
-                    <span className="min-w-0 flex-1 truncate text-foreground">{f.name}</span>
-                    <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">{f.relativePath}</span>
-                  </div>
-                ))}
-              </div>
-              {fileSearchTask.result.truncated && (
-                <p className="border-t border-hairline px-4 py-1.5 text-xs text-muted">
-                  결과가 더 있어요 — 검색어를 좁혀보세요.
-                </p>
-              )}
-            </>
+            <div className="px-4 py-3">
+              <FileSearchResultList result={fileSearchTask.result} />
+            </div>
           )}
         </div>
       )}
@@ -1217,32 +1092,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             <LoadingIndicator label={TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'} />
           )}
           {statusTask.phase === 'failed' && <p className="text-sm text-accent-blue">{statusTask.message}</p>}
-          {statusTask.phase === 'done' && (
-            <div className="flex flex-col gap-2">
-              {(
-                [
-                  { label: 'CPU', percent: statusTask.result.cpuPercent, detail: null },
-                  {
-                    label: '메모리',
-                    percent: statusTask.result.memoryPercent,
-                    detail: `${statusTask.result.memoryUsedMb.toLocaleString()} / ${statusTask.result.memoryTotalMb.toLocaleString()} MB`,
-                  },
-                  {
-                    label: '디스크',
-                    percent: statusTask.result.diskPercent,
-                    detail: `${statusTask.result.diskUsedMb.toLocaleString()} / ${statusTask.result.diskTotalMb.toLocaleString()} MB`,
-                  },
-                ] as const
-              ).map((row) => (
-                <div key={row.label} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-muted">{row.label}</span>
-                  <span className="text-foreground">
-                    {row.percent.toFixed(1)}%{row.detail ? ` · ${row.detail}` : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {statusTask.phase === 'done' && <SystemStatusResultCard result={statusTask.result} />}
         </div>
       )}
 
@@ -1280,11 +1130,6 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
       {showCommandModeHint && <p className="pl-4 text-left text-xs text-accent-blue">{commandModeHint}</p>}
 
-      {showCommandHint && (
-        <p className="pl-4 text-left text-xs text-accent-blue">
-          명령어 모드 — Slash 명령으로 서버에 바로 요청해요.
-        </p>
-      )}
       {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
           자리이므로, 모델 이름을 고정 문구("로컬 LLM") 대신 여기에 그대로 적는다. 조사는 사용자가
           친 문장과 모델 이름 둘 다 뒤에 붙으므로 '이(가)'와 같은 병기 형태로 둔다 — 모델 이름이

@@ -1,191 +1,135 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router'
-import {
-  ChevronDown,
-  Share2,
-  Copy,
-  Check,
-  Volume2,
-  Square,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCcw,
-  FileText,
-  Globe,
-  Download,
-  CornerDownRight,
-} from 'lucide-react'
+import { useParams, useNavigate, Link } from 'react-router'
+import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
-import { SearchBar } from '../../components/SearchBar'
-import { findThread, type AssistantContent, type DownloadFile, type FileResult, type WebResult } from './mockThreads'
+import { ApiError } from '../../lib/apiClient'
+import { getTask, createTaskRequest, isTerminalTaskStatus, formatRelativeTime, type TaskDetail } from '../../lib/tasks'
+import { ResultCard, summarizeResult, taskErrorMessage, LoadingIndicator, TASK_STATUS_LABELS } from '../../lib/taskResultRenderers'
 
 const ACTION_BUTTON_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-raised hover:text-foreground'
 
-// 아직 백엔드 연동이 없는 자리 — 좋아요/별로예요는 저장할 엔드포인트가, 다시 생성은 원 요청
-// 텍스트를 들고 있는 실 채팅 API가 있어야 한다(지금은 mockThreads.ts 기반).
-const DECORATIVE_ICONS = [
-  { icon: ThumbsUp, label: '좋아요' },
-  { icon: ThumbsDown, label: '별로예요' },
-  { icon: RotateCcw, label: '다시 생성' },
-]
+const POLL_INTERVAL_MS = 2000
 
-function FileResultRow({ item }: { item: FileResult }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center gap-3 rounded-xl border border-hairline bg-surface px-3 py-2.5 text-left transition-colors hover:bg-surface-raised"
-    >
-      <FileText size={18} className="shrink-0 text-muted" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-foreground">{item.name}</span>
-        <span className="block truncate text-xs text-muted">{item.path}</span>
-      </span>
-    </button>
-  )
-}
-
-function WebResultCard({ item }: { item: WebResult }) {
-  return (
-    <div className="rounded-xl border border-hairline bg-surface p-3.5">
-      <div className="flex items-center gap-1.5 text-xs text-muted">
-        <Globe size={12} className="text-accent-blue" />
-        {item.domain}
-      </div>
-      <p className="mt-1 text-sm font-medium text-foreground">{item.title}</p>
-      <p className="mt-1 text-sm text-muted">{item.snippet}</p>
-    </div>
-  )
-}
-
-/** 목 파일이지만 내려받기는 진짜로 동작한다 — content를 그대로 Blob으로 만들어 넘긴다. */
-function downloadMockFile(file: DownloadFile) {
-  const url = URL.createObjectURL(new Blob([file.content], { type: file.mime }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = file.name
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-function DownloadCard({ file }: { file: DownloadFile }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3.5">
-      <FileText size={20} className="shrink-0 text-muted" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{file.name}</span>
-        <span className="block text-xs text-muted">{file.meta}</span>
-      </span>
-      <button
-        type="button"
-        onClick={() => downloadMockFile(file)}
-        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-foreground/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15"
-      >
-        <Download size={14} />
-        내려받기
-      </button>
-    </div>
-  )
-}
-
-function AssistantContentBlock({ content }: { content: AssistantContent }) {
-  switch (content.type) {
-    case 'file-results':
-      return (
-        <div className="flex flex-col gap-2">
-          {content.items.map((f) => (
-            <FileResultRow key={f.name} item={f} />
-          ))}
-        </div>
-      )
-    case 'web-results':
-      return (
-        <div className="flex flex-col gap-2">
-          {content.items.map((w) => (
-            <WebResultCard key={w.title} item={w} />
-          ))}
-        </div>
-      )
-    case 'route-steps':
-      return (
-        <div className="overflow-hidden rounded-xl border border-hairline bg-surface">
-          <p className="border-b border-hairline px-3.5 py-2 text-xs font-medium text-accent-blue">{content.total}</p>
-          {content.items.map((step) => (
-            <div key={step.label} className="flex items-start gap-2.5 px-3.5 py-2.5">
-              <CornerDownRight size={15} className="mt-0.5 shrink-0 text-muted" />
-              <span className="min-w-0">
-                <span className="block text-sm text-foreground">{step.label}</span>
-                <span className="block text-xs text-muted">{step.detail}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )
-    case 'code':
-      return (
-        <pre className="overflow-x-auto rounded-xl border border-hairline bg-surface p-3.5 text-xs leading-relaxed text-foreground">
-          <code>{content.code}</code>
-        </pre>
-      )
-    case 'download':
-      return <DownloadCard file={content.file} />
-  }
-}
-
-function ThreadNotFound() {
-  return (
-    <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-3 text-center">
-      <p className="text-sm text-muted">이 대화를 찾을 수 없어요. 지워졌거나 주소가 잘못된 것 같아요.</p>
-      <Link
-        to="/new"
-        className="rounded-lg bg-foreground/10 px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-foreground/15"
-      >
-        새로 검색하기
-      </Link>
-    </div>
-  )
-}
-
+// 백엔드엔 "대화(멀티턴)" 개념이 없다 — 요청 1개 = task 1개 = 답변 1개다. 그래서 이 화면은 한 번의
+// 질문-답변만 보여주고, 이어서 더 묻는 입력창은 두지 않는다(§ dev 코멘트). 이어 묻고 싶으면
+// "다시 생성"으로 새 task를 만들거나 /new로 돌아가 새로 시작한다.
 export function ChatDetailPage() {
   const { id } = useParams()
-  const thread = findThread(id)
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
-  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
+  const navigate = useNavigate()
+  const [task, setTask] = useState<TaskDetail | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+
+  useEffect(() => {
+    if (!id) {
+      setLoadError('이 대화를 찾을 수 없어요. 지워졌거나 주소가 잘못된 것 같아요.')
+      return
+    }
+    let cancelled = false
+    let timeoutId: number | undefined
+
+    const poll = () => {
+      getTask(id)
+        .then((detail) => {
+          if (cancelled) return
+          setTask(detail)
+          setLoadError(null)
+          if (!isTerminalTaskStatus(detail.status)) {
+            timeoutId = window.setTimeout(poll, POLL_INTERVAL_MS)
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return
+          setLoadError(err instanceof ApiError ? err.message : '이 대화를 불러오지 못했어요.')
+        })
+    }
+    poll()
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [id])
 
   // 라우트를 벗어나면(다른 대화로 이동 등) 읽던 것도 멈춘다 — 안 그러면 화면엔 안 보이는데
   // 목소리만 계속 나온다.
   useEffect(() => () => window.speechSynthesis?.cancel(), [])
 
-  const copyText = (text: string, i: number) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedIndex(i)
-      setTimeout(() => setCopiedIndex((cur) => (cur === i ? null : cur)), 1500)
+  const answerText = task ? summarizeResult(task.taskType, task.result) : null
+
+  const copyText = () => {
+    if (!answerText) return
+    navigator.clipboard.writeText(answerText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
     })
   }
 
-  const toggleSpeak = (text: string, i: number) => {
-    if (!window.speechSynthesis) return
-    if (speakingIndex === i) {
+  const toggleSpeak = () => {
+    if (!window.speechSynthesis || !answerText) return
+    if (speaking) {
       window.speechSynthesis.cancel()
-      setSpeakingIndex(null)
+      setSpeaking(false)
       return
     }
-    window.speechSynthesis.cancel() // 겹쳐 읽지 않도록 다른 답변 재생을 먼저 멈춘다.
-    const utterance = new SpeechSynthesisUtterance(text)
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(answerText)
     utterance.lang = 'ko-KR'
-    utterance.onend = () => setSpeakingIndex((cur) => (cur === i ? null : cur))
-    utterance.onerror = () => setSpeakingIndex((cur) => (cur === i ? null : cur))
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
     window.speechSynthesis.speak(utterance)
-    setSpeakingIndex(i)
+    setSpeaking(true)
   }
 
-  if (!thread) return <ThreadNotFound />
+  const regenerate = async () => {
+    if (!task || regenerating) return
+    setRegenerating(true)
+    try {
+      const created = await createTaskRequest(task.inputText)
+      navigate(`/chat/${created.taskId}`, { replace: true })
+    } catch {
+      setRegenerating(false)
+    }
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted">{loadError}</p>
+        <Link
+          to="/new"
+          className="rounded-lg bg-foreground/10 px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-foreground/15"
+        >
+          새로 검색하기
+        </Link>
+      </div>
+    )
+  }
+
+  if (!task) {
+    return (
+      <div className="flex w-full max-w-3xl flex-1 items-center justify-center">
+        <LoadingIndicator label="불러오는 중이에요" />
+      </div>
+    )
+  }
+
+  const isCommand = task.inputText.startsWith('/')
+  // 실제 원문은 "/명령 값"이 한 문자열이라(NLU가 갈라서 백엔드로 보낼 뿐 프론트는 다시 안 나눔),
+  // 첫 토큰만 칩으로 떼어내고 나머지를 본문으로 보여준다 — command 필드가 따로 있던 mock과 달리
+  // 정확한 명령 경로 파싱은 아니지만 화면 모양은 그대로 유지한다.
+  const [commandToken, ...rest] = task.inputText.split(' ')
+  const bodyText = isCommand ? rest.join(' ') : task.inputText
+  const timeLabel = formatRelativeTime(task.completedAt ?? task.createdAt)
 
   return (
     <div className="flex w-full max-w-3xl flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-hairline pb-4">
         <button type="button" className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
-          <span className="truncate">{thread.title}</span>
+          <span className="truncate">{task.inputText}</span>
           <ChevronDown size={16} className="shrink-0 text-muted" />
         </button>
         <button
@@ -198,65 +142,71 @@ export function ChatDetailPage() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 py-6">
-        {thread.items.map((item, i) =>
-          item.role === 'user' ? (
-            <div key={i} className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
-              {item.attachment && (
-                <div className="mb-3 flex items-center gap-3 rounded-xl border border-hairline bg-surface-raised p-2.5">
-                  <FileText size={18} className="shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-foreground">{item.attachment.name}</span>
-                    <span className="block text-xs text-muted">{item.attachment.meta}</span>
-                  </span>
-                  <span className="shrink-0 rounded-md bg-foreground/8 px-1.5 py-0.5 text-2xs font-medium text-muted">
-                    {item.attachment.format}
-                  </span>
-                </div>
-              )}
-              {/* 명령으로 물어본 대화는 검색바와 같은 모양으로 — 명령어는 칩, 값은 본문 */}
-              {item.command && (
-                <span className="mb-2 inline-block rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
-                  {item.command.path.join('/')}
-                </span>
-              )}
-              <p className="text-sm text-foreground">{item.text}</p>
-            </div>
-          ) : (
-            <div key={i} className="max-w-2xl">
-              <p className="whitespace-pre-line text-control leading-relaxed text-foreground">{item.text}</p>
+        <div className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
+          {isCommand && (
+            <span className="mb-2 inline-block rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
+              {commandToken}
+            </span>
+          )}
+          <p className="text-sm text-foreground">{bodyText || task.inputText}</p>
+        </div>
 
-              {item.content && (
-                <div className="mt-3">
-                  <AssistantContentBlock content={item.content} />
-                </div>
+        <div className="max-w-2xl">
+          {!isTerminalTaskStatus(task.status) ? (
+            <LoadingIndicator label={TASK_STATUS_LABELS[task.status] ?? '처리하는 중이에요'} />
+          ) : task.status !== 'SUCCEEDED' ? (
+            <p className="text-control leading-relaxed text-accent-blue">{taskErrorMessage(task.errorCode)}</p>
+          ) : task.result && answerText ? (
+            <>
+              {/* WEATHER_LOOKUP·TEXT_SUMMARY는 ResultCard 안에 이미 문장이 있다(DESIGN.md §10) —
+                  그 외 타입만 여기서 한 줄 요약을 먼저 보여준다. */}
+              {task.taskType !== 'WEATHER_LOOKUP' && task.taskType !== 'TEXT_SUMMARY' && (
+                <p className="text-control leading-relaxed text-foreground">{answerText}</p>
               )}
-
-              <div className="mt-3 flex items-center gap-1">
-                <Tooltip label={copiedIndex === i ? '복사됨' : '복사'}>
-                  <button type="button" onClick={() => copyText(item.text, i)} className={ACTION_BUTTON_CLASS}>
-                    {copiedIndex === i ? <Check size={15} /> : <Copy size={15} />}
-                  </button>
-                </Tooltip>
-                <Tooltip label={speakingIndex === i ? '정지' : '읽어주기'}>
-                  <button type="button" onClick={() => toggleSpeak(item.text, i)} className={ACTION_BUTTON_CLASS}>
-                    {speakingIndex === i ? <Square size={15} /> : <Volume2 size={15} />}
-                  </button>
-                </Tooltip>
-                {DECORATIVE_ICONS.map(({ icon: Icon, label }) => (
-                  <Tooltip key={label} label={label}>
-                    <button type="button" className={ACTION_BUTTON_CLASS}>
-                      <Icon size={15} />
-                    </button>
-                  </Tooltip>
-                ))}
+              <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
+                <ResultCard taskType={task.taskType} result={task.result} />
               </div>
-            </div>
-          ),
-        )}
-      </div>
+            </>
+          ) : (
+            <p className="text-control leading-relaxed text-muted">이 결과는 아직 화면에서 지원하지 않아요.</p>
+          )}
 
-      <div className="sticky bottom-0 bg-canvas pb-2 pt-2">
-        <SearchBar />
+          {task.status === 'SUCCEEDED' && answerText && (
+            <div className="mt-3 flex items-center gap-1">
+              <Tooltip label={copied ? '복사됨' : '복사'}>
+                <button type="button" onClick={copyText} className={ACTION_BUTTON_CLASS}>
+                  {copied ? <Check size={15} /> : <Copy size={15} />}
+                </button>
+              </Tooltip>
+              <Tooltip label={speaking ? '정지' : '읽어주기'}>
+                <button type="button" onClick={toggleSpeak} className={ACTION_BUTTON_CLASS}>
+                  {speaking ? <Square size={15} /> : <Volume2 size={15} />}
+                </button>
+              </Tooltip>
+              <Tooltip label="좋아요">
+                <button type="button" className={ACTION_BUTTON_CLASS}>
+                  <ThumbsUp size={15} />
+                </button>
+              </Tooltip>
+              <Tooltip label="별로예요">
+                <button type="button" className={ACTION_BUTTON_CLASS}>
+                  <ThumbsDown size={15} />
+                </button>
+              </Tooltip>
+              <Tooltip label="다시 생성">
+                <button
+                  type="button"
+                  onClick={regenerate}
+                  disabled={regenerating}
+                  className={`${ACTION_BUTTON_CLASS} disabled:opacity-40`}
+                >
+                  <RotateCcw size={15} />
+                </button>
+              </Tooltip>
+              <span className="ml-1 text-xs text-muted">{timeLabel}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

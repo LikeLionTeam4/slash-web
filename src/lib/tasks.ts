@@ -83,6 +83,11 @@ export interface TaskDetail {
   // text로 새 요청을 받는 구조라 답변도 새 요청이다), 응답 계약을 그대로 담아둔다.
   question?: string | null
   correlationId?: string | null
+  /** 사용자가 접수 시점에 친 원문. 채팅 상세 화면의 사용자 말풍선·"다시 생성"에 쓴다. */
+  inputText: string
+  createdAt: string
+  /** 끝난 작업만 있다. */
+  completedAt?: string
 }
 
 export function createTaskRequest(text: string, selectedDeviceId?: string): Promise<TaskCreateResponse> {
