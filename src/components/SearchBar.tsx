@@ -210,7 +210,16 @@ const STATUS_POLL_INTERVAL_MS = 2000
 // 입력창이 가로로 무한히 늘어나지 않도록 세로 auto-resize의 상한 — 대략 8줄.
 const TEXTAREA_MAX_HEIGHT_PX = 192
 
-export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
+export function SearchBar({
+  presetQuery,
+  onActiveChange,
+}: {
+  presetQuery?: { path: string[]; operands: string[] }
+  // 이 검색창 아래의 제안·힌트·결과 패널은 absolute 오버레이라(§4 "Below-pill panels") 아래
+  // 콘텐츠(홈 화면 예시 칩 등)를 밀어내지 않고 그 위에 뜬다 — 패널이 뜰 만한 상태(active)를
+  // 부모에게 알려줘서, 그 콘텐츠를 부모 쪽에서 숨기게 한다(2026-08-20).
+  onActiveChange?: (active: boolean) => void
+}) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -337,6 +346,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     !showCommandModeHint &&
     isCommand
   const modelPickerActive = showModelPicker || (showModelSearch && modelSearchPickerOpen)
+
+  useEffect(() => {
+    onActiveChange?.(active)
+  }, [active, onActiveChange])
 
   useEffect(() => {
     setHighlightIndex(0)
