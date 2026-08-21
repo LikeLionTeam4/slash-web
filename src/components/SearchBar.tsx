@@ -26,7 +26,7 @@ import { buildDeepLink, deepLinkHint } from '../lib/deepLinks'
 import { getSuggestions, findCommand, type CommandNode } from '../lib/commandTree'
 import { useAgentStatus } from '../hooks/agentStatusContext'
 import { ApiError } from '../lib/apiClient'
-import { createTaskRequest, type TaskStatus } from '../lib/tasks'
+import { createTaskRequest, submitBrowserSummaryResult, type TaskStatus } from '../lib/tasks'
 import { isWebGpuSupported } from '../lib/webgpuSupport'
 import type { SummarizeProgress } from '../lib/webllm'
 import {
@@ -212,6 +212,16 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const showModelSearch = !showSuggestions && !showModelPicker && !showFileSearch && isModelSearchCommand
   // 검색 상태 패널이 떠 있으면 "파일 이름을 입력하고 Enter" 줄은 겹쳐서 시끄럽기만 하다.
   const showCommandModeHint = !!commandModeHint && !showFileSearch
+  // /요약은 WebGPU가 없으면 서버로 조용히 넘어간다(기존 서버 경로 그대로, 새로 생긴 동작이
+  // 아니라 원래도 서버로 가던 경로다) — 그래도 왜 브라우저에서 안 되는지는 미리 알려준다.
+  // WebGPU가 있으면 submitCommand에서 runBrowserSummaryCommand가 먼저 채가서 여기까지
+  // 오지 않는다(commandModeHint는 이 경우 항상 null이라 겹치지 않음).
+  const showWebGpuUnsupportedHint =
+    isGenericCommand &&
+    commandMode?.path[0] === '요약' &&
+    hasText &&
+    browserSummaryTask.phase === 'idle' &&
+    !isWebGpuSupported()
   const showPlaceholderMsg =
     !showSuggestions && !showModelPicker && !showFileSearch && !showModelSearch && !showCommandModeHint && !!placeholderMsg
   const showDeepLinkHint =
@@ -409,12 +419,16 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
    *  이 함수를 아예 부르지 않고 지금까지와 같은 서버 경로(runFreeTextCommand)로 보낸다 —
    *  그쪽은 원래도 서버로 가던 경로라 "조용한 대체"가 아니다.
    *  `@mlc-ai/web-llm`은 여기서 동적으로만 불러온다 — 이 명령을 한 번도 안 쓰는 사용자의
-   *  메인 번들에 수 MB짜리 라이브러리가 딸려 들어가지 않게 하기 위함(webgpuSupport.ts 참고). */
+   *  메인 번들에 수 MB짜리 라이브러리가 딸려 들어가지 않게 하기 위함(webgpuSupport.ts 참고).
+   *  결과를 다 보여준 뒤 slash-api에 결과만 제출해 작업 이력에 남긴다(원문은 안 보냄,
+   *  slash-docs#3 권장 순서 3번) — 화면에 이미 보여준 결과에는 영향 없는 부수 작업이라
+   *  실패해도 사용자에게 알리지 않는다(이력 한 줄이 안 남을 뿐, 방금 받은 요약은 그대로다). */
   async function runBrowserSummaryCommand(text: string) {
     if (browserSummaryTask.phase === 'loading' || browserSummaryTask.phase === 'generating') return
     setBrowserSummaryTask({ phase: 'loading', progress: 0, message: '모델을 준비하고 있어요' })
+    const startedAt = performance.now()
     try {
-      const { summarizeInBrowser } = await import('../lib/webllm')
+      const { summarizeInBrowser, MODEL_ID, PROMPT_VERSION } = await import('../lib/webllm')
       const summary = await summarizeInBrowser(text, (progress: SummarizeProgress) => {
         if (progress.phase === 'loading') {
           setBrowserSummaryTask({
@@ -427,11 +441,28 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         }
       })
       setBrowserSummaryTask({ phase: 'succeeded', summary })
-    } catch {
+      submitBrowserSummaryResult({
+        inputLength: text.length,
+        modelId: MODEL_ID,
+        promptVersion: PROMPT_VERSION,
+        status: 'SUCCEEDED',
+        summary,
+        durationMs: Math.round(performance.now() - startedAt),
+      }).catch(() => {})
+    } catch (err) {
       setBrowserSummaryTask({
         phase: 'failed',
         message: '브라우저에서 요약하지 못했어요. 잠시 후 다시 시도해주세요.',
       })
+      import('../lib/webllm').then(({ MODEL_ID, PROMPT_VERSION }) =>
+        submitBrowserSummaryResult({
+          inputLength: text.length,
+          modelId: MODEL_ID,
+          promptVersion: PROMPT_VERSION,
+          status: 'FAILED',
+          errorMessage: err instanceof Error ? err.message : '알 수 없는 오류',
+        }).catch(() => {}),
+      )
     }
   }
 
@@ -1047,6 +1078,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       {showDeepLinkHint && <p className="pl-4 text-left text-xs text-accent-blue">{deepLinkHintText}</p>}
 
       {showCommandModeHint && <p className="pl-4 text-left text-xs text-accent-blue">{commandModeHint}</p>}
+
+      {showWebGpuUnsupportedHint && (
+        <p className="pl-4 text-left text-xs text-accent-blue">
+          이 브라우저는 WebLLM을 지원하지 않아 서버에서 요약해요.
+        </p>
+      )}
 
       {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
           자리이므로, 모델 이름을 고정 문구("로컬 LLM") 대신 여기에 그대로 적는다. 조사는 사용자가
