@@ -24,29 +24,34 @@ export interface TaskCreateResponse {
   statusUrl: string
 }
 
+// slash-api 이슈 #38 — PC가 디스크를 읽지 못하면 Agent가 null로 두고, null 필드는 응답에서
+// 아예 빠진다(계약서 §2). CPU·메모리는 항상 온다.
 export interface SystemStatusResult {
   cpuPercent: number
   memoryPercent: number
   memoryTotalMb: number
   memoryUsedMb: number
-  diskPercent: number
-  diskTotalMb: number
-  diskUsedMb: number
+  diskPercent?: number
+  diskTotalMb?: number
+  diskUsedMb?: number
   collectedAt: string
 }
 
-// slash-api 이슈 #25에서 실측된 형태 — Agent(slash-python-agent/file_index.py)가 이 네 필드만
-// 보내고, 서버는 결과를 가공하지 않고 그대로 전달한다. fileRef·extension·searchFolderId·query는
-// 계약에 없다(searchFolderId·query는 result가 아니라 task.parameters에 있다) — 열기/삭제 같은
-// 후속 액션은 이슈 #25 2번 항목으로 아직 별도 설계 중.
+// 계약서 §2.1 FILE_SEARCH — Agent(slash-python-agent/file_index.py)가 실제로 보내는 여섯 필드
+// (slash-api 이슈 #38). fileRef는 절대 경로 대신 쓰는 열쇠로, 열기 같은 후속 동작에 그대로
+// 돌려보낸다. extension은 없으면 빈 문자열.
 export interface FileSearchResultItem {
+  fileRef: string
   name: string
   relativePath: string
+  extension: string
   sizeBytes: number
   modifiedAt: string
 }
 
 export interface FileSearchResult {
+  searchFolderId: string
+  query: string
   items: FileSearchResultItem[]
   returnedCount: number
   truncated: boolean
