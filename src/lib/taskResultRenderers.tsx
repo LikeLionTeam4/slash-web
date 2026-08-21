@@ -85,23 +85,24 @@ export function TextSummaryResultCard({ result }: { result: TextSummaryResult })
 }
 
 export function SystemStatusResultCard({ result }: { result: SystemStatusResult }) {
+  const rows = [
+    { label: 'CPU', percent: result.cpuPercent, detail: null },
+    {
+      label: '메모리',
+      percent: result.memoryPercent,
+      detail: `${result.memoryUsedMb.toLocaleString()} / ${result.memoryTotalMb.toLocaleString()} MB`,
+    },
+  ]
+  if (result.diskPercent !== undefined) {
+    rows.push({
+      label: '디스크',
+      percent: result.diskPercent,
+      detail: `${result.diskUsedMb!.toLocaleString()} / ${result.diskTotalMb!.toLocaleString()} MB`,
+    })
+  }
   return (
     <div className="flex flex-col gap-2">
-      {(
-        [
-          { label: 'CPU', percent: result.cpuPercent, detail: null },
-          {
-            label: '메모리',
-            percent: result.memoryPercent,
-            detail: `${result.memoryUsedMb.toLocaleString()} / ${result.memoryTotalMb.toLocaleString()} MB`,
-          },
-          {
-            label: '디스크',
-            percent: result.diskPercent,
-            detail: `${result.diskUsedMb.toLocaleString()} / ${result.diskTotalMb.toLocaleString()} MB`,
-          },
-        ] as const
-      ).map((row) => (
+      {rows.map((row) => (
         <div key={row.label} className="flex items-center justify-between gap-3 text-sm">
           <span className="text-muted">{row.label}</span>
           <span className="text-foreground">
@@ -109,6 +110,7 @@ export function SystemStatusResultCard({ result }: { result: SystemStatusResult 
           </span>
         </div>
       ))}
+      {result.diskPercent === undefined && <p className="text-xs text-muted">디스크 정보를 읽지 못했어요.</p>}
     </div>
   )
 }
@@ -121,7 +123,7 @@ export function FileSearchResultList({ result }: { result: FileSearchResult }) {
     <div className="flex flex-col gap-2">
       <div className="max-h-64 overflow-y-auto">
         {result.items.map((f) => (
-          <div key={f.relativePath} className="flex items-center gap-2.5 py-2 text-sm">
+          <div key={f.fileRef} className="flex items-center gap-2.5 py-2 text-sm">
             <FileText size={16} className="shrink-0 text-muted" />
             <span className="min-w-0 flex-1 truncate text-foreground">{f.name}</span>
             <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">{f.relativePath}</span>
@@ -150,10 +152,13 @@ const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
   TASK_EXPIRED: '실행 기한이 지났어요.',
   UNRECOGNIZED_COMMAND: '요청을 알아듣지 못했어요.',
   SEARCH_FOLDER_NOT_FOUND: 'PC의 에이전트에서 검색할 폴더를 추가해주세요.',
+  FILE_NOT_FOUND: '파일을 찾을 수 없어요. 그 사이 옮겨졌거나 지워진 것 같아요.',
   AGENT_REJECTED: 'PC가 이 요청을 받지 않았어요.',
   AGENT_TASK_FAILED: 'PC에서 실행이 끝나지 못했어요.',
+  DEVICE_REVOKED: 'PC 등록이 해제됐어요. 다시 등록해주세요.',
   NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
   UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
+  LOCATION_NOT_FOUND: '지역을 찾지 못했어요. 시·군 이름으로 다시 말씀해주세요.',
 }
 
 export function taskErrorMessage(code: string | null): string {
@@ -170,7 +175,8 @@ export function summarizeResult(taskType: string | null, result: TaskDetailResul
       return (result as TextSummaryResult).summary
     case 'SYSTEM_STATUS': {
       const r = result as SystemStatusResult
-      return `CPU ${r.cpuPercent.toFixed(1)}%, 메모리 ${r.memoryPercent.toFixed(1)}%, 디스크 ${r.diskPercent.toFixed(1)}%를 쓰고 있어요.`
+      const disk = r.diskPercent !== undefined ? `, 디스크 ${r.diskPercent.toFixed(1)}%` : ''
+      return `CPU ${r.cpuPercent.toFixed(1)}%, 메모리 ${r.memoryPercent.toFixed(1)}%${disk}를 쓰고 있어요.`
     }
     case 'FILE_SEARCH': {
       const r = result as FileSearchResult
