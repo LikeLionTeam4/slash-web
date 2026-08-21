@@ -16,6 +16,11 @@ export { isWebGpuSupported } from './webgpuSupport'
 
 export const MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
 
+// 고정 시스템 프롬프트가 바뀌면 이 값을 올린다 — slash-docs#3 처리 원칙 2번(작업 이력에
+// "무엇으로 만든 결과인지" 남기기)이 요구하는 값이라, GENERATION_CONFIG처럼 프롬프트도
+// 버전으로 추적한다.
+export const PROMPT_VERSION = 'v1'
+
 // slash-docs#3 원칙 — "WebLLM은 대화 기억이 없는 단건 생성기로 사용한다": 매 요청 고정
 // 시스템 프롬프트 + 현재 입력만 쓰고, 이전 요청을 다음 요청에 넘기지 않는다. 편차를 줄이려고
 // temperature 0·top_p 1·고정 seed를 쓴다 — 그렇다고 기기마다 결과가 완전히 같아야 하는

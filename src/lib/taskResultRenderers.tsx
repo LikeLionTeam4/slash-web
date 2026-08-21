@@ -1,7 +1,14 @@
 // SearchBar의 결과 패널과 ChatDetailPage의 답변 카드가 같이 쓰는 taskType별 렌더링·문구.
 // 한 곳에서만 고치면 두 화면이 항상 같은 모양을 보여준다.
 import { FileText, Droplets, Wind } from 'lucide-react'
-import type { TaskStatus, SystemStatusResult, FileSearchResult, WeatherLookupResult, TextSummaryResult } from './tasks'
+import type {
+  TaskStatus,
+  SystemStatusResult,
+  FileSearchResult,
+  WeatherLookupResult,
+  TextSummaryResult,
+  BrowserTextSummaryResult,
+} from './tasks'
 
 /** 결과를 기다리는 동안 쓰는 표시 — 제네릭 스피너 대신 브랜드 모티프인 "/"를 펄스시킨다(§7). */
 export function LoadingIndicator({ label, className = '' }: { label: string; className?: string }) {
@@ -74,12 +81,21 @@ export function WeatherResultCard({ result }: { result: WeatherLookupResult }) {
   )
 }
 
-/** TEXT_SUMMARY 결과 카드 — slash-infra 이슈 #42 검증 중 실측한 필드 그대로 렌더링. */
-export function TextSummaryResultCard({ result }: { result: TextSummaryResult }) {
+type TextSummaryResultUnion = TextSummaryResult | BrowserTextSummaryResult
+
+/** TEXT_SUMMARY 결과 카드 — CPU 추출·Gemma는 slash-infra 이슈 #42 실측 필드,
+ *  브라우저 WebLLM은 이 브라우저에서 요약할 때 보여주던 것과 같은 캡션을 쓴다
+ *  (SearchBar.tsx의 실시간 표시와 이력 화면이 같은 문구를 보여줘야 한다). */
+export function TextSummaryResultCard({ result }: { result: TextSummaryResultUnion }) {
+  const caption =
+    'modelId' in result
+      ? '이 브라우저에서 직접 요약했어요 · 원문이 서버로 전송되지 않았어요.'
+      : `${result.model}이(가) 요약했어요.`
+
   return (
     <div className="flex flex-col gap-2">
       <p className="whitespace-pre-wrap text-sm text-foreground">{result.summary}</p>
-      <p className="text-xs text-muted">{result.model}이(가) 요약했어요.</p>
+      <p className="text-xs text-muted">{caption}</p>
     </div>
   )
 }
@@ -172,7 +188,7 @@ export function summarizeResult(taskType: string | null, result: TaskDetailResul
     case 'WEATHER_LOOKUP':
       return describeWeather(result as WeatherLookupResult)
     case 'TEXT_SUMMARY':
-      return (result as TextSummaryResult).summary
+      return (result as TextSummaryResultUnion).summary
     case 'SYSTEM_STATUS': {
       const r = result as SystemStatusResult
       const disk = r.diskPercent !== undefined ? `, 디스크 ${r.diskPercent.toFixed(1)}%` : ''
@@ -187,7 +203,11 @@ export function summarizeResult(taskType: string | null, result: TaskDetailResul
   }
 }
 
-type TaskDetailResultUnion = SystemStatusResult | FileSearchResult | WeatherLookupResult | TextSummaryResult
+type TaskDetailResultUnion =
+  | SystemStatusResult
+  | FileSearchResult
+  | WeatherLookupResult
+  | TextSummaryResultUnion
 
 /** taskType에 맞는 결과 카드로 분기 — 아직 화면이 없는 타입(FILE_OPEN·AI_AGENT_USAGE 등)은 null. */
 export function ResultCard({ taskType, result }: { taskType: string | null; result: TaskDetailResultUnion }) {
@@ -195,7 +215,7 @@ export function ResultCard({ taskType, result }: { taskType: string | null; resu
     case 'WEATHER_LOOKUP':
       return <WeatherResultCard result={result as WeatherLookupResult} />
     case 'TEXT_SUMMARY':
-      return <TextSummaryResultCard result={result as TextSummaryResult} />
+      return <TextSummaryResultCard result={result as TextSummaryResultUnion} />
     case 'SYSTEM_STATUS':
       return <SystemStatusResultCard result={result as SystemStatusResult} />
     case 'FILE_SEARCH':

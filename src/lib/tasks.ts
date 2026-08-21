@@ -77,11 +77,26 @@ export interface TextSummaryResult {
   model: string
 }
 
+// executionTarget이 BROWSER일 때의 결과 형태 — submitBrowserSummaryResult로 제출한 그대로
+// 되돌아온다(frontend-api-contract.md "브라우저에서 이미 끝낸 요약 제출하기").
+export interface BrowserTextSummaryResult {
+  summary: string
+  modelId: string
+  promptVersion: string
+  durationMs?: number
+}
+
 export interface TaskDetail {
   taskId: string
   status: TaskStatus
   taskType: string | null
-  result: SystemStatusResult | FileSearchResult | WeatherLookupResult | TextSummaryResult | null
+  result:
+    | SystemStatusResult
+    | FileSearchResult
+    | WeatherLookupResult
+    | TextSummaryResult
+    | BrowserTextSummaryResult
+    | null
   errorCode: string | null
   // NEEDS_CLARIFICATION일 때만 채워진다 — slash-api TaskDetailResponse의 question/correlationId
   // 그대로다. correlationId는 지금은 화면에서 쓰지 않지만(백엔드가 이어가는 대화가 아니라 새
@@ -105,6 +120,32 @@ export function createTaskRequest(text: string, selectedDeviceId?: string): Prom
 
 export function getTask(taskId: string): Promise<TaskDetail> {
   return apiRequest<TaskDetail>(`/api/v1/tasks/${taskId}`)
+}
+
+/** 브라우저(WebLLM)가 이미 끝낸 요약 결과를 제출한다 — slash-docs#3 권장 순서 3번.
+ *
+ *  원문은 여기 없다. `inputLength`(글자 수)만 보낸다 — 원문을 브라우저 밖으로 내보내지
+ *  않는다는 게 이 경로의 존재 이유라, 호출부가 실수로 원문을 실어 보내도 받을 자리가
+ *  없다. 응답은 `/requests`처럼 202가 아니라 이미 최종 상태(SUCCEEDED/FAILED)라 폴링할
+ *  게 없다.
+ *
+ *  Idempotency-Key는 `/requests`와 달리 필수다 — 재시도가 실행을 다시 트리거하는 게
+ *  아니라 새 이력을 또 만드는 것으로 이어지므로, 호출부가 요약 1회당 한 번만 불러야
+ *  한다(재시도 시에도 같은 결과로 다시 부르면 서버가 같은 이력으로 묶어 준다). */
+export function submitBrowserSummaryResult(params: {
+  inputLength: number
+  modelId: string
+  promptVersion: string
+  status: 'SUCCEEDED' | 'FAILED'
+  summary?: string
+  durationMs?: number
+  errorMessage?: string
+}): Promise<TaskCreateResponse> {
+  return apiRequest<TaskCreateResponse>('/api/v1/tasks/text-summary/browser-result', {
+    method: 'POST',
+    body: params,
+    idempotencyKey: newIdempotencyKey(),
+  })
 }
 
 // 이력 화면·대시보드·사이드바 "최근" — frontend-api-contract.md "이력 화면 (P0-B)" 구현.
