@@ -3,6 +3,7 @@ import { Search, Sparkles, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { ApiError } from '../../lib/apiClient'
 import { getTaskHistory, toHistoryEntry, type HistoryEntry } from '../../lib/tasks'
+import { CommandBadge } from '../../components/CommandBadge'
 
 const RECENT_COUNT = 5
 
@@ -94,11 +95,7 @@ export function DashboardPage() {
                 className="flex items-center justify-between gap-4 border-b border-hairline px-2 py-3 text-left text-sm transition-colors hover:bg-surface-raised"
               >
                 <span className="flex min-w-0 items-center gap-2 text-foreground">
-                  {entry.isCommand && (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
-                      /
-                    </span>
-                  )}
+                  <CommandBadge label={entry.commandLabel} />
                   <span className="truncate">{entry.text}</span>
                 </span>
                 <span className="shrink-0 text-xs text-muted">{entry.timeLabel}</span>
