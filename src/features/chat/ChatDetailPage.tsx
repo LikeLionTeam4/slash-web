@@ -192,9 +192,11 @@ export function ChatDetailPage() {
             </div>
           ) : task.result && answerText ? (
             <>
-              {/* WEATHER_LOOKUP·TEXT_SUMMARY는 ResultCard 안에 이미 문장이 있다(DESIGN.md §10) —
-                  그 외 타입만 여기서 한 줄 요약을 먼저 보여준다. */}
-              {task.taskType !== 'WEATHER_LOOKUP' && task.taskType !== 'TEXT_SUMMARY' && (
+              {/* WEATHER_LOOKUP·TEXT_SUMMARY·CODE_ANALYSIS는 ResultCard 안에 이미 문장이
+                  있다(DESIGN.md §10) — 그 외 타입만 여기서 한 줄 요약을 먼저 보여준다. */}
+              {task.taskType !== 'WEATHER_LOOKUP' &&
+                task.taskType !== 'TEXT_SUMMARY' &&
+                task.taskType !== 'CODE_ANALYSIS' && (
                 <p className="text-control leading-relaxed text-foreground">{answerText}</p>
               )}
               <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
