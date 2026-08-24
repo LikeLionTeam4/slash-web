@@ -98,15 +98,15 @@ type FreeTextTaskState =
   | { phase: 'running'; status: TaskStatus }
   | { phase: 'failed'; message: string }
 
-// /요약을 브라우저(WebLLM)에서 처리할 때만 쓴다 — 서버로 보내지 않으므로 taskId가 없고,
-// 다른 셋과 달리 끝나면 /chat으로 옮기지 않고 이 자리에 결과를 그대로 보여준다
-// (slash-docs#3 권장 순서 6번). 히스토리에 남기는 것은 이번 범위 밖이다 — slash-api가
-// 아직 브라우저가 만든 결과를 받는 계약이 없다(TaskService.resolveExecutionTarget 주석 참고).
+// /요약을 브라우저(WebLLM)에서 처리할 때만 쓴다 — 서버로 보내지 않으므로 결과가 먼저 나오고,
+// 그 다음 이력에 남기려고 결과만 slash-api에 제출한다(runBrowserSummaryCommand). 제출이
+// 성공하면 그 taskId로 /chat으로 옮기므로 이 succeeded 상태는 잠깐만 보인다. 제출이 실패하면
+// 옮길 taskId가 없어 이 자리에 남는데, `historySaveFailed`가 그 경우를 표시해 안내 문구를 띄운다.
 type BrowserSummaryTaskState =
   | { phase: 'idle' }
   | { phase: 'loading'; progress: number; message: string }
   | { phase: 'generating' }
-  | { phase: 'succeeded'; summary: string }
+  | { phase: 'succeeded'; summary: string; historySaveFailed?: boolean }
   | { phase: 'failed'; message: string }
 
 // 입력창이 가로로 무한히 늘어나지 않도록 세로 auto-resize의 상한 — 대략 8줄.
@@ -421,8 +421,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
    *  `@mlc-ai/web-llm`은 여기서 동적으로만 불러온다 — 이 명령을 한 번도 안 쓰는 사용자의
    *  메인 번들에 수 MB짜리 라이브러리가 딸려 들어가지 않게 하기 위함(webgpuSupport.ts 참고).
    *  결과를 다 보여준 뒤 slash-api에 결과만 제출해 작업 이력에 남긴다(원문은 안 보냄,
-   *  slash-docs#3 권장 순서 3번) — 화면에 이미 보여준 결과에는 영향 없는 부수 작업이라
-   *  실패해도 사용자에게 알리지 않는다(이력 한 줄이 안 남을 뿐, 방금 받은 요약은 그대로다). */
+   *  slash-docs#3 권장 순서 3번). 제출이 성공하면 그 taskId로 /chat으로 옮겨서 다른 명령과
+   *  똑같이 히스토리·공유·재생성이 되는 화면을 정본으로 삼는다 — 실패하면(taskId가 없으니)
+   *  옮기지 않고 이 자리에 결과를 그대로 둔다(이력 한 줄이 안 남을 뿐, 방금 받은 요약은 그대로다). */
   async function runBrowserSummaryCommand(text: string) {
     if (browserSummaryTask.phase === 'loading' || browserSummaryTask.phase === 'generating') return
     setBrowserSummaryTask({ phase: 'loading', progress: 0, message: '모델을 준비하고 있어요' })
@@ -448,7 +449,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         status: 'SUCCEEDED',
         summary,
         durationMs: Math.round(performance.now() - startedAt),
-      }).catch(() => {})
+      })
+        .then((created) => navigate(`/chat/${created.taskId}`))
+        .catch(() => setBrowserSummaryTask({ phase: 'succeeded', summary, historySaveFailed: true }))
     } catch (err) {
       setBrowserSummaryTask({
         phase: 'failed',
@@ -1050,9 +1053,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         </div>
       )}
 
-      {/* /요약을 이 브라우저에서 처리하는 동안·끝난 뒤의 표시. 서버로 보낸 게 아니라서 /chat으로
-          옮기지 않고 여기 그대로 결과를 보여준다 — TextSummaryResultCard(taskResultRenderers.tsx)와
-          같은 문단·캡션 배치를 그대로 따른다(새 시각 패턴을 만들지 않음, DESIGN.md §14). */}
+      {/* /요약을 이 브라우저에서 처리하는 동안·끝난 뒤의 표시 — TextSummaryResultCard
+          (taskResultRenderers.tsx)와 같은 문단·캡션 배치를 그대로 따른다(새 시각 패턴을 만들지
+          않음, DESIGN.md §14). 이력 제출까지 성공하면 곧바로 /chat으로 옮겨가므로 이 succeeded
+          블록은 보통 잠깐만 보인다 — 이력 제출이 실패했을 때만(historySaveFailed) 여기 남는다. */}
       {browserSummaryTask.phase !== 'idle' && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
           {browserSummaryTask.phase === 'loading' && (
@@ -1065,6 +1069,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
             <div className="flex flex-col gap-2">
               <p className="whitespace-pre-wrap text-sm text-foreground">{browserSummaryTask.summary}</p>
               <p className="text-xs text-muted">이 브라우저에서 직접 요약했어요 · 원문이 서버로 전송되지 않았어요.</p>
+              {browserSummaryTask.historySaveFailed && (
+                <p className="text-xs text-accent-blue">이력에는 남기지 못했어요 — 방금 받은 요약은 그대로예요.</p>
+              )}
             </div>
           )}
           {browserSummaryTask.phase === 'failed' && (

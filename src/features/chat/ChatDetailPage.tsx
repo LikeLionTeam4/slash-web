@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
@@ -22,6 +22,14 @@ export function ChatDetailPage() {
   const [copied, setCopied] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [retryLocation, setRetryLocation] = useState('')
+  const [retrying, setRetrying] = useState(false)
+
+  // 새 task로 넘어갈 때(재시도 성공, 다른 대화로 이동 등) 이전 task에 달아뒀던 재시도 입력을 지운다.
+  useEffect(() => {
+    setRetryLocation('')
+    setRetrying(false)
+  }, [id])
 
   useEffect(() => {
     if (!id) {
@@ -97,6 +105,23 @@ export function ChatDetailPage() {
     }
   }
 
+  // LOCATION_NOT_FOUND 전용: 원문이 명령이었으면(`/날씨 부산`) 명령 토큰은 남기고 지역만 바꿔서
+  // 새 task를 만든다 — "다시 생성"과 달리 같은 값을 그대로 재전송하지 않는다.
+  const retryWithLocation = async (e: FormEvent) => {
+    e.preventDefault()
+    const value = retryLocation.trim()
+    if (!task || !value || retrying) return
+    setRetrying(true)
+    try {
+      const [commandToken] = task.inputText.split(' ')
+      const text = task.inputText.startsWith('/') ? `${commandToken} ${value}` : value
+      const created = await createTaskRequest(text)
+      navigate(`/chat/${created.taskId}`, { replace: true })
+    } catch {
+      setRetrying(false)
+    }
+  }
+
   if (loadError) {
     return (
       <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-3 text-center">
@@ -166,7 +191,29 @@ export function ChatDetailPage() {
           ) : !isTerminalTaskStatus(task.status) ? (
             <LoadingIndicator label={TASK_STATUS_LABELS[task.status] ?? '처리하는 중이에요'} />
           ) : task.status !== 'SUCCEEDED' ? (
-            <p className="text-control leading-relaxed text-accent-blue">{taskErrorMessage(task.errorCode)}</p>
+            <div className="flex flex-col gap-2">
+              <p className="text-control leading-relaxed text-accent-blue">{taskErrorMessage(task.errorCode)}</p>
+              {task.errorCode === 'LOCATION_NOT_FOUND' && (
+                <form onSubmit={retryWithLocation} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={retryLocation}
+                    onChange={(e) => setRetryLocation(e.target.value)}
+                    placeholder="시·군 이름 입력"
+                    disabled={retrying}
+                    autoFocus
+                    className="h-9 flex-1 min-w-0 rounded-lg border border-hairline bg-surface px-3 text-control text-foreground placeholder:text-muted focus:outline-none focus:border-accent-blue disabled:opacity-60"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!retryLocation.trim() || retrying}
+                    className="h-9 shrink-0 rounded-lg bg-accent-blue px-3 text-control font-medium text-white transition-colors hover:bg-accent-blue/90 disabled:opacity-40"
+                  >
+                    다시 검색
+                  </button>
+                </form>
+              )}
+            </div>
           ) : task.result && answerText ? (
             <>
               {/* WEATHER_LOOKUP·TEXT_SUMMARY는 ResultCard 안에 이미 문장이 있다(DESIGN.md §10) —
