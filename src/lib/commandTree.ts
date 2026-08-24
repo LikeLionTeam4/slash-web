@@ -12,6 +12,12 @@ export type CommandNode = {
    * 값을 받지 않는 명령(`/모델`, `/파일/휴지통` 같은 패널)은 이 필드가 없다.
    */
   operands?: string[]
+  /**
+   * 값을 더 안 받고 고르는 즉시 제출하는 리프 노드(예: /사용량/클로드) — operands도 없고 하위
+   * 메뉴로 더 내려가지도 않는다. 선택하면 첫 세그먼트는 명령어, 나머지는 공백으로 이어붙인
+   * 값으로 조립해(`/사용량 클로드`) 바로 전송한다(SearchBar.tsx의 selectSuggestion).
+   */
+  submitOnSelect?: boolean
 }
 
 // Flattened (2026-07-30, later): "/" already implies "search", so a literal "검색" segment was
@@ -39,6 +45,17 @@ export const COMMAND_TREE: CommandNode[] = [
   // workspaceId는 서버가 등록된 프로젝트 폴더 중에서 자동으로 고른다(TaskType.CODE_ANALYSIS의
   // backendProvidedParameters) — /파일의 searchFolderId와 같은 이유로 여기서 값을 받지 않는다.
   { id: '코드', label: '코드', description: '등록한 프로젝트 폴더를 읽기 전용으로 분석해요', operands: ['질문'] },
+  // provider는 텍스트로 자유 입력받지 않고 둘 중 하나를 고르게 한다 — slash-nlu(analyzer.py의
+  // _USAGE_PROVIDER_ALIASES)가 "클로드"·"코덱스" 표기를 그대로 CLAUDE_CODE·CODEX로 인식한다.
+  {
+    id: '사용량',
+    label: '사용량',
+    description: 'Claude Code·Codex CLI의 로컬 사용량을 확인해요',
+    children: [
+      { id: '클로드', label: '클로드', description: 'Claude Code 사용량', submitOnSelect: true },
+      { id: '코덱스', label: '코덱스', description: 'Codex 사용량', submitOnSelect: true },
+    ],
+  },
   {
     id: '네이버',
     label: '네이버',

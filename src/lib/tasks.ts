@@ -96,6 +96,23 @@ export interface CodeAnalysisResult {
   collectedAt: string
 }
 
+// slash-api docs/frontend-api-contract.md §AI_AGENT_USAGE. 다른 결과 타입과 다른 두 가지 예외가
+// 있다 — totalReasoningTokens는 값이 없어도 null로 오고 필드가 안 빠진다(Claude Code는 null,
+// Codex는 숫자). oldestSessionAt·newestSessionAt은 UTC(Z)로 오고 같은 응답의 collectedAt은
+// KST라 한 응답에 시각 두 표기가 섞인다 — 그 도구를 쓴 적 없으면 CODE_AGENT_NOT_CONFIGURED(422).
+export interface AiAgentUsageResult {
+  provider: 'CLAUDE_CODE' | 'CODEX'
+  totalSessions: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCachedTokens: number
+  totalReasoningTokens: number | null
+  totalTokens: number
+  oldestSessionAt: string
+  newestSessionAt: string
+  collectedAt: string
+}
+
 export interface TaskDetail {
   taskId: string
   status: TaskStatus
@@ -107,6 +124,7 @@ export interface TaskDetail {
     | TextSummaryResult
     | BrowserTextSummaryResult
     | CodeAnalysisResult
+    | AiAgentUsageResult
     | null
   errorCode: string | null
   // NEEDS_CLARIFICATION일 때만 채워진다 — slash-api TaskDetailResponse의 question/correlationId
@@ -214,6 +232,7 @@ export const TASK_TYPE_COMMAND_LABELS: Record<string, string> = {
   FILE_SEARCH: '파일',
   SYSTEM_STATUS: '상태',
   CODE_ANALYSIS: '코드',
+  AI_AGENT_USAGE: '사용량',
 }
 
 /** 히스토리·최근·대시보드가 공유하는 행 모양. commandLabel은 requestSummary 문자열이 아니라
@@ -226,6 +245,17 @@ export type HistoryEntry = { id: string; text: string; commandLabel: string | nu
 
 export function toHistoryEntry(item: TaskHistoryItem): HistoryEntry {
   const commandLabel = (item.taskType && TASK_TYPE_COMMAND_LABELS[item.taskType]) ?? null
+  // FILE_OPEN의 원문은 "/open f62dfe8a-…"처럼 사용자가 알아볼 수 없는 fileRef를 담고 있다 —
+  // 파일 검색 결과 카드의 "위치 보기" 버튼이 대신 보낸 것이라(사용자가 직접 친 게 아님) 잘라내는
+  // 걸로는 못 고친다. 고정 문구로 통째로 바꾼다.
+  if (item.taskType === 'FILE_OPEN') {
+    return {
+      id: item.taskId,
+      text: '파일 위치 보기',
+      commandLabel,
+      timeLabel: formatRelativeTime(item.createdAt),
+    }
+  }
   const isCommand = item.requestSummary.startsWith('/')
   // taskType이 안 알려진 명령이면(라벨 없음) 배지를 못 그리니 원문을 그대로 둔다 — 잘라내기만
   // 하고 배지가 안 뜨면 명령 토큰 자체가 화면에서 사라져버린다.

@@ -1,6 +1,7 @@
 // SearchBar의 결과 패널과 ChatDetailPage의 답변 카드가 같이 쓰는 taskType별 렌더링·문구.
 // 한 곳에서만 고치면 두 화면이 항상 같은 모양을 보여준다.
-import { FileText, Droplets, Wind } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FileText, FolderOpen, Check, Loader2, Droplets, Wind } from 'lucide-react'
 import type {
   TaskStatus,
   SystemStatusResult,
@@ -9,7 +10,10 @@ import type {
   TextSummaryResult,
   BrowserTextSummaryResult,
   CodeAnalysisResult,
+  AiAgentUsageResult,
 } from './tasks'
+import { formatRelativeTime, createTaskRequest, getTask, isTerminalTaskStatus } from './tasks'
+import { ApiError } from './apiClient'
 
 /** 결과를 기다리는 동안 쓰는 표시 — 제네릭 스피너 대신 브랜드 모티프인 "/"를 펄스시킨다(§7). */
 export function LoadingIndicator({ label, className = '' }: { label: string; className?: string }) {
@@ -132,6 +136,70 @@ export function SystemStatusResultCard({ result }: { result: SystemStatusResult 
   )
 }
 
+type FileOpenState = { phase: 'idle' | 'loading' | 'done' } | { phase: 'error'; message: string }
+
+const OPEN_POLL_INTERVAL_MS = 1500
+
+/** 파일 검색 결과 행의 "위치 보기" 버튼 — FILE_OPEN은 fileRef를 그대로 돌려보내는 새 task라
+ *  (결과 카드 없음, Finder·탐색기만 뜬다) ChatDetailPage로 옮기지 않고 이 자리에서 폴링해
+ *  버튼 하나로 완결한다(복사·읽어주기 버튼과 같은 인라인 패턴). */
+function FileOpenButton({ fileRef }: { fileRef: string }) {
+  const [state, setState] = useState<FileOpenState>({ phase: 'idle' })
+  const cancelledRef = useRef(false)
+  useEffect(() => () => {
+    cancelledRef.current = true
+  }, [])
+
+  async function pollUntilDone(taskId: string) {
+    const detail = await getTask(taskId)
+    if (cancelledRef.current) return
+    if (!isTerminalTaskStatus(detail.status)) {
+      await new Promise((resolve) => setTimeout(resolve, OPEN_POLL_INTERVAL_MS))
+      if (!cancelledRef.current) await pollUntilDone(taskId)
+      return
+    }
+    if (detail.status === 'SUCCEEDED') {
+      setState({ phase: 'done' })
+      setTimeout(() => !cancelledRef.current && setState({ phase: 'idle' }), 2000)
+    } else {
+      setState({ phase: 'error', message: taskErrorMessage(detail.errorCode) })
+    }
+  }
+
+  async function openLocation() {
+    if (state.phase === 'loading') return
+    setState({ phase: 'loading' })
+    try {
+      const created = await createTaskRequest(`/open ${fileRef}`)
+      await pollUntilDone(created.taskId)
+    } catch (err) {
+      if (!cancelledRef.current) {
+        setState({ phase: 'error', message: err instanceof ApiError ? err.message : '요청을 보내지 못했어요.' })
+      }
+    }
+  }
+
+  if (state.phase === 'done') {
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-xs text-accent-green">
+        <Check size={13} />
+        열었어요
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={openLocation}
+      disabled={state.phase === 'loading'}
+      className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-foreground/8 hover:text-foreground disabled:opacity-60"
+    >
+      {state.phase === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+      {state.phase === 'error' ? state.message : '위치 보기'}
+    </button>
+  )
+}
+
 export function FileSearchResultList({ result }: { result: FileSearchResult }) {
   if (result.items.length === 0) {
     return <p className="text-sm text-muted">일치하는 파일이 없어요.</p>
@@ -144,6 +212,7 @@ export function FileSearchResultList({ result }: { result: FileSearchResult }) {
             <FileText size={16} className="shrink-0 text-muted" />
             <span className="min-w-0 flex-1 truncate text-foreground">{f.name}</span>
             <span className="max-w-[30%] shrink-0 truncate text-xs text-muted">{f.relativePath}</span>
+            <FileOpenButton fileRef={f.fileRef} />
           </div>
         ))}
       </div>
@@ -167,6 +236,41 @@ export function CodeAnalysisResultCard({ result }: { result: CodeAnalysisResult 
       <p className="text-xs text-muted">
         {CODE_ADAPTER_LABELS[result.codeAdapter]}이(가) 분석했어요{turnsLabel} ·{' '}
         {(result.durationMs / 1000).toFixed(1)}초
+      </p>
+    </div>
+  )
+}
+
+/** AI_AGENT_USAGE 결과 카드 — frontend-api-contract.md §AI_AGENT_USAGE 실측 필드 그대로.
+ *  provider별로 totalReasoningTokens 유무가 갈리고(Claude Code는 항상 null), 세션은
+ *  있는데 토큰이 전부 0으로 오는 실측 케이스가 있어 그 경우 숫자 대신 안내 문구를 보여준다. */
+export function AiAgentUsageResultCard({ result }: { result: AiAgentUsageResult }) {
+  const zeroTokensDespiteSessions = result.totalSessions > 0 && result.totalTokens === 0
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-muted">세션</span>
+        <span className="text-foreground">{result.totalSessions.toLocaleString()}개</span>
+      </div>
+      {zeroTokensDespiteSessions ? (
+        <p className="text-xs text-muted">
+          세션 기록은 있지만 토큰 사용량을 아직 못 읽었어요 — 로그 파일 형식이 바뀌었을 수 있어요.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted">총 토큰</span>
+            <span className="tabular-nums text-foreground">{result.totalTokens.toLocaleString()}</span>
+          </div>
+          <p className="text-xs text-muted">
+            입력 {result.totalInputTokens.toLocaleString()} · 출력 {result.totalOutputTokens.toLocaleString()} ·
+            캐시 {result.totalCachedTokens.toLocaleString()}
+            {result.totalReasoningTokens !== null && ` · 추론 ${result.totalReasoningTokens.toLocaleString()}`}
+          </p>
+        </>
+      )}
+      <p className="text-xs text-muted">
+        {formatRelativeTime(result.oldestSessionAt)} ~ {formatRelativeTime(result.newestSessionAt)} 세션 기준
       </p>
     </div>
   )
@@ -196,6 +300,7 @@ const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
   NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
   UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
   LOCATION_NOT_FOUND: '지역을 찾지 못했어요. 시·군 이름으로 다시 말씀해주세요.',
+  CODE_AGENT_NOT_CONFIGURED: '이 PC에서 그 도구를 쓴 적이 없어요.',
 }
 
 export function taskErrorMessage(code: string | null): string {
@@ -221,6 +326,12 @@ export function summarizeResult(taskType: string | null, result: TaskDetailResul
     }
     case 'CODE_ANALYSIS':
       return (result as CodeAnalysisResult).summary
+    case 'AI_AGENT_USAGE': {
+      const r = result as AiAgentUsageResult
+      return r.totalSessions > 0 && r.totalTokens === 0
+        ? '세션 기록은 있지만 토큰 사용량을 아직 못 읽었어요.'
+        : `세션 ${r.totalSessions.toLocaleString()}개, 토큰 ${r.totalTokens.toLocaleString()}개를 썼어요.`
+    }
     default:
       return null
   }
@@ -232,6 +343,7 @@ type TaskDetailResultUnion =
   | WeatherLookupResult
   | TextSummaryResultUnion
   | CodeAnalysisResult
+  | AiAgentUsageResult
 
 /** taskType에 맞는 결과 카드로 분기 — 아직 화면이 없는 타입(FILE_OPEN·AI_AGENT_USAGE 등)은 null. */
 export function ResultCard({ taskType, result }: { taskType: string | null; result: TaskDetailResultUnion }) {
@@ -246,6 +358,8 @@ export function ResultCard({ taskType, result }: { taskType: string | null; resu
       return <FileSearchResultList result={result as FileSearchResult} />
     case 'CODE_ANALYSIS':
       return <CodeAnalysisResultCard result={result as CodeAnalysisResult} />
+    case 'AI_AGENT_USAGE':
+      return <AiAgentUsageResultCard result={result as AiAgentUsageResult} />
     default:
       return null
   }

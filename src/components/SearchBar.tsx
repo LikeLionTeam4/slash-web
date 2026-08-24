@@ -311,6 +311,14 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
   function selectSuggestion(pathIds: string[], option: CommandNode) {
     const fullPath = [...pathIds, option.id]
+    if (option.submitOnSelect) {
+      // 값을 더 안 받는 리프(예: /사용량/클로드) — 첫 세그먼트는 명령어, 나머지는 값으로 이어붙여
+      // 자유 텍스트와 같은 경로로 바로 보낸다.
+      flashSubmitButton()
+      runFreeTextCommand(`/${fullPath[0]} ${fullPath.slice(1).join(' ')}`)
+      setValue('')
+      return
+    }
     if (option.operands) {
       // 값을 받는 명령 — 명령어 텍스트는 칩으로 빠지고 입력창은 값만 받는다.
       setCommandMode({ path: fullPath, operands: [] })
