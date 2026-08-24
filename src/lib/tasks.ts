@@ -207,14 +207,21 @@ export const TASK_TYPE_COMMAND_LABELS: Record<string, string> = {
 /** 히스토리·최근·대시보드가 공유하는 행 모양. commandLabel은 requestSummary 문자열이 아니라
  *  taskType으로 정한다 — 브라우저 요약(WebLLM)처럼 실제로는 `/요약`으로 시작했지만 원문을 서버에
  *  보내지 않아 requestSummary가 `/`로 시작하지 않는 경우가 있어서, 텍스트 접두어만으로는
- *  명령 여부를 알 수 없다(taskType은 항상 그 작업이 실제로 어떤 종류인지를 담고 있다). */
+ *  명령 여부를 알 수 없다(taskType은 항상 그 작업이 실제로 어떤 종류인지를 담고 있다). text는
+ *  명령이었다면 그 토큰을 뗀 나머지만 담는다 — 행에서 CommandBadge와 나란히 그리는 게
+ *  이미 그 토큰을 보여주므로, text에 남겨두면 "/날씨 /날씨 서울"처럼 중복된다. */
 export type HistoryEntry = { id: string; text: string; commandLabel: string | null; timeLabel: string }
 
 export function toHistoryEntry(item: TaskHistoryItem): HistoryEntry {
+  const commandLabel = (item.taskType && TASK_TYPE_COMMAND_LABELS[item.taskType]) ?? null
+  const isCommand = item.requestSummary.startsWith('/')
+  // taskType이 안 알려진 명령이면(라벨 없음) 배지를 못 그리니 원문을 그대로 둔다 — 잘라내기만
+  // 하고 배지가 안 뜨면 명령 토큰 자체가 화면에서 사라져버린다.
+  const text = isCommand && commandLabel ? item.requestSummary.split(' ').slice(1).join(' ') : item.requestSummary
   return {
     id: item.taskId,
-    text: item.requestSummary,
-    commandLabel: (item.taskType && TASK_TYPE_COMMAND_LABELS[item.taskType]) ?? null,
+    text,
+    commandLabel,
     timeLabel: formatRelativeTime(item.createdAt),
   }
 }
