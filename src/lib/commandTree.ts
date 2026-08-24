@@ -36,6 +36,9 @@ export const COMMAND_TREE: CommandNode[] = [
   // slash-nlu의 SLASH_ALIASES(intents.py)가 실제로 인식하는 별칭이다 — '상태'·'status' 둘 다
   // SYSTEM_STATUS로 매핑되지만, 이 앱의 다른 명령어가 전부 한글이라 그쪽에 맞춘다.
   { id: '상태', label: '상태', description: '이 PC의 CPU·메모리·디스크 사용량을 확인해요' },
+  // workspaceId는 서버가 등록된 프로젝트 폴더 중에서 자동으로 고른다(TaskType.CODE_ANALYSIS의
+  // backendProvidedParameters) — /파일의 searchFolderId와 같은 이유로 여기서 값을 받지 않는다.
+  { id: '코드', label: '코드', description: '등록한 프로젝트 폴더를 읽기 전용으로 분석해요', operands: ['질문'] },
   {
     id: '네이버',
     label: '네이버',

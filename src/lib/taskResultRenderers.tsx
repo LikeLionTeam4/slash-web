@@ -8,6 +8,7 @@ import type {
   WeatherLookupResult,
   TextSummaryResult,
   BrowserTextSummaryResult,
+  CodeAnalysisResult,
 } from './tasks'
 
 /** 결과를 기다리는 동안 쓰는 표시 — 제네릭 스피너 대신 브랜드 모티프인 "/"를 펄스시킨다(§7). */
@@ -151,6 +152,26 @@ export function FileSearchResultList({ result }: { result: FileSearchResult }) {
   )
 }
 
+const CODE_ADAPTER_LABELS: Record<CodeAnalysisResult['codeAdapter'], string> = {
+  CLAUDE_CODE: 'Claude Code',
+  CODEX: 'Codex',
+}
+
+/** CODE_ANALYSIS 결과 카드 — 등록한 프로젝트 폴더를 읽기 전용으로 분석한 답. turns는 CLI가
+ *  준 값을 못 읽으면 null로 온다(slash-agent code_adapters.py). */
+export function CodeAnalysisResultCard({ result }: { result: CodeAnalysisResult }) {
+  const turnsLabel = result.turns !== null ? ` · ${result.turns}턴` : ''
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="whitespace-pre-wrap text-sm text-foreground">{result.summary}</p>
+      <p className="text-xs text-muted">
+        {CODE_ADAPTER_LABELS[result.codeAdapter]}이(가) 분석했어요{turnsLabel} ·{' '}
+        {(result.durationMs / 1000).toFixed(1)}초
+      </p>
+    </div>
+  )
+}
+
 /** 진행 중 상태별 안내 문구 — frontend-api-contract.md §W1-04 "상태값" 표. */
 export const TASK_STATUS_LABELS: Partial<Record<TaskStatus, string>> = {
   ANALYZING: '무슨 요청인지 분석하는 중이에요',
@@ -198,6 +219,8 @@ export function summarizeResult(taskType: string | null, result: TaskDetailResul
       const r = result as FileSearchResult
       return r.items.length === 0 ? '일치하는 파일이 없어요.' : `파일 ${r.items.length}개를 찾았어요.`
     }
+    case 'CODE_ANALYSIS':
+      return (result as CodeAnalysisResult).summary
     default:
       return null
   }
@@ -208,6 +231,7 @@ type TaskDetailResultUnion =
   | FileSearchResult
   | WeatherLookupResult
   | TextSummaryResultUnion
+  | CodeAnalysisResult
 
 /** taskType에 맞는 결과 카드로 분기 — 아직 화면이 없는 타입(FILE_OPEN·AI_AGENT_USAGE 등)은 null. */
 export function ResultCard({ taskType, result }: { taskType: string | null; result: TaskDetailResultUnion }) {
@@ -220,6 +244,8 @@ export function ResultCard({ taskType, result }: { taskType: string | null; resu
       return <SystemStatusResultCard result={result as SystemStatusResult} />
     case 'FILE_SEARCH':
       return <FileSearchResultList result={result as FileSearchResult} />
+    case 'CODE_ANALYSIS':
+      return <CodeAnalysisResultCard result={result as CodeAnalysisResult} />
     default:
       return null
   }

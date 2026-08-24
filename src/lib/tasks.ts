@@ -86,6 +86,16 @@ export interface BrowserTextSummaryResult {
   durationMs?: number
 }
 
+// slash-api docs/frontend-api-contract.md §CODE_ANALYSIS. slash-agent의 code_adapters.py가
+// 실제로 만드는 필드 그대로다 — turns는 CLI가 준 값을 못 읽으면 null로 온다.
+export interface CodeAnalysisResult {
+  codeAdapter: 'CLAUDE_CODE' | 'CODEX'
+  summary: string
+  turns: number | null
+  durationMs: number
+  collectedAt: string
+}
+
 export interface TaskDetail {
   taskId: string
   status: TaskStatus
@@ -96,6 +106,7 @@ export interface TaskDetail {
     | WeatherLookupResult
     | TextSummaryResult
     | BrowserTextSummaryResult
+    | CodeAnalysisResult
     | null
   errorCode: string | null
   // NEEDS_CLARIFICATION일 때만 채워진다 — slash-api TaskDetailResponse의 question/correlationId
@@ -202,6 +213,7 @@ export const TASK_TYPE_COMMAND_LABELS: Record<string, string> = {
   TEXT_SUMMARY: '요약',
   FILE_SEARCH: '파일',
   SYSTEM_STATUS: '상태',
+  CODE_ANALYSIS: '코드',
 }
 
 /** 히스토리·최근·대시보드가 공유하는 행 모양. commandLabel은 requestSummary 문자열이 아니라
