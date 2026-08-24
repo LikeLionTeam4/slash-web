@@ -194,15 +194,27 @@ export function getTaskHistory(filter: TaskHistoryFilter = {}): Promise<TaskHist
   return apiRequest<TaskHistoryPage>(`/api/v1/tasks${query ? `?${query}` : ''}`)
 }
 
-/** 히스토리·최근·대시보드가 공유하는 행 모양. `text`가 `/`로 시작하면 슬래시 명령이다 —
- *  requestSummary는 사용자가 입력한 원문 그대로라, 명령으로 물었으면 원문도 `/`로 시작한다. */
-export type HistoryEntry = { id: string; text: string; isCommand: boolean; timeLabel: string }
+/** taskType → 배지·필터에 쓰는 명령 이름. 결과 화면(ResultCard, taskResultRenderers.tsx)이 있는
+ *  타입만 넣는다 — 히스토리 필터 드롭다운도 이 맵의 키를 그대로 옵션으로 쓴다(배지와 필터가
+ *  서로 다른 기준으로 어긋나지 않도록 한 곳만 고친다). */
+export const TASK_TYPE_COMMAND_LABELS: Record<string, string> = {
+  WEATHER_LOOKUP: '날씨',
+  TEXT_SUMMARY: '요약',
+  FILE_SEARCH: '파일',
+  SYSTEM_STATUS: '상태',
+}
+
+/** 히스토리·최근·대시보드가 공유하는 행 모양. commandLabel은 requestSummary 문자열이 아니라
+ *  taskType으로 정한다 — 브라우저 요약(WebLLM)처럼 실제로는 `/요약`으로 시작했지만 원문을 서버에
+ *  보내지 않아 requestSummary가 `/`로 시작하지 않는 경우가 있어서, 텍스트 접두어만으로는
+ *  명령 여부를 알 수 없다(taskType은 항상 그 작업이 실제로 어떤 종류인지를 담고 있다). */
+export type HistoryEntry = { id: string; text: string; commandLabel: string | null; timeLabel: string }
 
 export function toHistoryEntry(item: TaskHistoryItem): HistoryEntry {
   return {
     id: item.taskId,
     text: item.requestSummary,
-    isCommand: item.requestSummary.startsWith('/'),
+    commandLabel: (item.taskType && TASK_TYPE_COMMAND_LABELS[item.taskType]) ?? null,
     timeLabel: formatRelativeTime(item.createdAt),
   }
 }

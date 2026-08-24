@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft, Plus, History, LayoutDashboard, Star, Calendar, Command, Download } from 'lucide-react'
 import { Tooltip } from './Tooltip'
 import { ProfileMenu } from './ProfileMenu'
+import { CommandBadge } from './CommandBadge'
 import { useAuth, useHomePath } from '../hooks/authContext'
 import { getTaskHistory, toHistoryEntry, type HistoryEntry } from '../lib/tasks'
 import { useAgentStatus } from '../hooks/agentStatusContext'
@@ -177,11 +178,7 @@ export function Sidebar({
                   onClick={() => navigate(`/chat/${item.id}`)}
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
                 >
-                  {item.isCommand && (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-accent-blue text-2xs font-semibold text-white">
-                      /
-                    </span>
-                  )}
+                  <CommandBadge label={item.commandLabel} />
                   <span className="truncate">{item.text}</span>
                 </button>
               ))}

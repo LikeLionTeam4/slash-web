@@ -3,7 +3,14 @@ import { useParams, useNavigate, Link } from 'react-router'
 import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
 import { ApiError } from '../../lib/apiClient'
-import { getTask, createTaskRequest, isTerminalTaskStatus, formatRelativeTime, type TaskDetail } from '../../lib/tasks'
+import {
+  getTask,
+  createTaskRequest,
+  isTerminalTaskStatus,
+  formatRelativeTime,
+  TASK_TYPE_COMMAND_LABELS,
+  type TaskDetail,
+} from '../../lib/tasks'
 import { ResultCard, summarizeResult, taskErrorMessage, LoadingIndicator, TASK_STATUS_LABELS } from '../../lib/taskResultRenderers'
 
 const ACTION_BUTTON_CLASS =
@@ -150,6 +157,10 @@ export function ChatDetailPage() {
   // 정확한 명령 경로 파싱은 아니지만 화면 모양은 그대로 유지한다.
   const [commandToken, ...rest] = task.inputText.split(' ')
   const bodyText = isCommand ? rest.join(' ') : task.inputText
+  // 브라우저 요약(WebLLM)처럼 원문을 서버에 보내지 않는 경로는 inputText가 `/`로 시작하지 않는다
+  // (백엔드가 대신 보여줄 문구를 만들어 준다) — 그래도 taskType은 실제로 어떤 명령이었는지 알고
+  // 있으므로, 리터럴 `/` 파싱이 실패하면 taskType으로 배지만 보충한다(본문은 원문 그대로 둔다).
+  const commandLabel = isCommand ? null : task.taskType && TASK_TYPE_COMMAND_LABELS[task.taskType]
   const timeLabel = formatRelativeTime(task.completedAt ?? task.createdAt)
 
   return (
@@ -170,9 +181,9 @@ export function ChatDetailPage() {
 
       <div className="flex flex-1 flex-col gap-6 py-6">
         <div className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
-          {isCommand && (
+          {(isCommand || commandLabel) && (
             <span className="mb-2 inline-block rounded-full bg-accent-blue/12 px-2.5 py-1 text-xs font-medium text-accent-blue">
-              {commandToken}
+              {isCommand ? commandToken : `/${commandLabel}`}
             </span>
           )}
           <p className="text-sm text-foreground">{bodyText || task.inputText}</p>
