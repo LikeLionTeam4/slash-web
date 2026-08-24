@@ -7,7 +7,7 @@ import { getClientInfo } from '../lib/clientInfo'
 import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
 import { Tooltip } from './Tooltip'
 import { createPairingRequest, getPairingStatus, type PairingRequest } from '../lib/pairing'
-import { listDevices, type DeviceStatus } from '../lib/devices'
+import { listDevices, revokeDevice, type DeviceStatus } from '../lib/devices'
 import { ApiError } from '../lib/apiClient'
 
 const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] = [
@@ -64,6 +64,8 @@ interface RegisteredDevice {
   // 아닌 기기는 다른 물리적 기기의 localhost라 브라우저가 직접 확인할 방법이 없으므로, 그
   // 기기들은 이 값을 그대로 믿는다("이 PC" 자신은 실시간 useAgentStatus()를 우선한다).
   status?: DeviceStatus
+  /** 해제(DELETE) 요청의 If-Match에 그대로 넣는다 — lib/devices.ts의 Device.version 참고. */
+  version: number
 }
 
 function formatDate(iso: string): string {
@@ -103,6 +105,8 @@ function PcManagement() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [pairing, setPairing] = useState<PairingPanelState>({ phase: 'idle' })
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   // 화면을 열 때 부른다(계약서 "지정 PC 관리 화면" 절) — 다른 탭에서 등록한 PC도 여기서 같이
   // 보여야 하므로 세션 로컬 상태로 들고 있지 않는다.
@@ -115,6 +119,7 @@ function PcManagement() {
           name: d.name,
           registeredAt: formatDate(d.registeredAt),
           status: d.status,
+          version: d.version,
         })),
       )
       setLoadError(null)
@@ -129,7 +134,24 @@ function PcManagement() {
     refreshDevices()
   }, [])
 
-  const removeDevice = (id: string) => setDevices((prev) => prev.filter((d) => d.id !== id))
+  // 되돌릴 수 없는 요청이라(#26) 확인을 먼저 받고, 성공하면 로컬 state를 임의로 지우는 대신
+  // refreshDevices()로 서버 목록을 다시 받는다 — 그 사이 다른 탭에서 바뀐 것까지 반영된다.
+  const removeDevice = async (device: RegisteredDevice) => {
+    if (removingId) return
+    if (!window.confirm(`${device.name} 등록을 해제할까요? 이 PC에서는 다시 등록하기 전까지 접속할 수 없어요.`)) {
+      return
+    }
+    setRemovingId(device.id)
+    setRemoveError(null)
+    try {
+      await revokeDevice(device.id, device.version)
+      await refreshDevices()
+    } catch (err) {
+      setRemoveError(err instanceof ApiError ? err.message : '기기를 해제하지 못했어요. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   const renameDevice = (id: string, name: string) =>
     setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, name: name.trim() || d.name } : d)))
@@ -284,6 +306,8 @@ function PcManagement() {
           등록현황 {devices.length}/{MAX_DEVICES}
         </p>
 
+        {removeError && <p className="mb-3 text-xs text-accent-blue">{removeError}</p>}
+
         <div className="flex flex-col gap-1.5">
           {devices.map((d) => {
             const isOnline = d.isThisDevice ? agentStatus === 'online' : d.status !== undefined && d.status !== 'OFFLINE'
@@ -349,10 +373,11 @@ function PcManagement() {
               <button
                 type="button"
                 aria-label={`${d.name} 삭제`}
-                onClick={() => removeDevice(d.id)}
-                className="shrink-0 text-muted transition-colors hover:text-foreground"
+                onClick={() => removeDevice(d)}
+                disabled={removingId === d.id}
+                className="shrink-0 text-muted transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
               >
-                <X size={14} />
+                {removingId === d.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
               </button>
             </div>
             )
