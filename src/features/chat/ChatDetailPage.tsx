@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
+import { CommandBadge } from '../../components/CommandBadge'
 import { ApiError } from '../../lib/apiClient'
 import {
   getTask,
@@ -135,7 +136,8 @@ export function ChatDetailPage() {
   // 브라우저 요약(WebLLM)처럼 원문을 서버에 보내지 않는 경로는 inputText가 `/`로 시작하지 않는다
   // (백엔드가 대신 보여줄 문구를 만들어 준다) — 그래도 taskType은 실제로 어떤 명령이었는지 알고
   // 있으므로, 리터럴 `/` 파싱이 실패하면 taskType으로 배지만 보충한다(본문은 원문 그대로 둔다).
-  const commandLabel = isCommand ? null : task.taskType && TASK_TYPE_COMMAND_LABELS[task.taskType]
+  // CommandBadge는 슬래시 아이콘을 자체적으로 그리므로 라벨에선 슬래시를 뗀다.
+  const badgeLabel = isCommand ? commandToken.slice(1) : task.taskType && TASK_TYPE_COMMAND_LABELS[task.taskType]
   const timeLabel = formatRelativeTime(task.completedAt ?? task.createdAt)
 
   return (
@@ -157,9 +159,9 @@ export function ChatDetailPage() {
       <div className="flex flex-1 flex-col gap-6 py-6">
         <div className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
           <p className="text-sm text-foreground">
-            {(isCommand || commandLabel) && (
-              <span className="mr-2 inline-block rounded-full bg-accent-blue/12 px-2.5 py-1 align-middle text-xs font-medium text-accent-blue">
-                {isCommand ? commandToken : `/${commandLabel}`}
+            {badgeLabel && (
+              <span className="mr-2">
+                <CommandBadge label={badgeLabel} />
               </span>
             )}
             {bodyText || task.inputText}
