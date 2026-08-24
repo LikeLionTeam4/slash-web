@@ -111,6 +111,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     throw new ApiError('UPSTREAM_UNAVAILABLE', '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
   }
 
+  // 204 No Content(예: DELETE /api/v1/devices/{id})는 본문이 아예 없다 — res.json()이 빈
+  // 문자열을 파싱하려다 실패해서 아래 error 분기로 잘못 떨어지는 것을 막는다.
+  if (res.status === 204) {
+    return undefined as T
+  }
+
   const json = (await res.json().catch(() => null)) as SuccessEnvelope<T> | ErrorEnvelope | null
 
   if (res.ok && json && 'data' in json) {
