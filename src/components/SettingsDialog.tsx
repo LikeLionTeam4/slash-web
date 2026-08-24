@@ -7,7 +7,7 @@ import { getClientInfo } from '../lib/clientInfo'
 import { SETTINGS_CATEGORIES as CATEGORIES, type SettingsCategoryId } from '../lib/settingsCategory'
 import { Tooltip } from './Tooltip'
 import { createPairingRequest, getPairingStatus, type PairingRequest } from '../lib/pairing'
-import { listDevices, revokeDevice, type DeviceStatus } from '../lib/devices'
+import { listDevices, revokeDevice, setTaskIntake, type DeviceStatus } from '../lib/devices'
 import { ApiError } from '../lib/apiClient'
 
 const APPEARANCE_OPTIONS: { id: Theme; icon: typeof Monitor; label: string }[] = [
@@ -66,6 +66,7 @@ interface RegisteredDevice {
   status?: DeviceStatus
   /** 해제(DELETE) 요청의 If-Match에 그대로 넣는다 — lib/devices.ts의 Device.version 참고. */
   version: number
+  acceptingTasks: boolean
 }
 
 function formatDate(iso: string): string {
@@ -107,6 +108,8 @@ function PcManagement() {
   const [pairing, setPairing] = useState<PairingPanelState>({ phase: 'idle' })
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [updatingIntakeId, setUpdatingIntakeId] = useState<string | null>(null)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
 
   // 화면을 열 때 부른다(계약서 "지정 PC 관리 화면" 절) — 다른 탭에서 등록한 PC도 여기서 같이
   // 보여야 하므로 세션 로컬 상태로 들고 있지 않는다.
@@ -120,6 +123,7 @@ function PcManagement() {
           registeredAt: formatDate(d.registeredAt),
           status: d.status,
           version: d.version,
+          acceptingTasks: d.acceptingTasks,
         })),
       )
       setLoadError(null)
@@ -150,6 +154,26 @@ function PcManagement() {
       setRemoveError(err instanceof ApiError ? err.message : '기기를 해제하지 못했어요. 잠시 후 다시 시도해주세요.')
     } finally {
       setRemovingId(null)
+    }
+  }
+
+  // 응답에 바뀐 기기 전체(새 version 포함)가 들어있어 refreshDevices() 없이 그 자리에서
+  // state를 갱신한다 — 해제와 달리 되돌릴 수 있는 조작이라 확인창은 없다.
+  const toggleTaskIntake = async (device: RegisteredDevice) => {
+    if (updatingIntakeId) return
+    setUpdatingIntakeId(device.id)
+    setIntakeError(null)
+    try {
+      const updated = await setTaskIntake(device.id, !device.acceptingTasks, device.version)
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.id === device.id ? { ...d, acceptingTasks: updated.acceptingTasks, version: updated.version } : d,
+        ),
+      )
+    } catch (err) {
+      setIntakeError(err instanceof ApiError ? err.message : '설정을 바꾸지 못했어요. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setUpdatingIntakeId(null)
     }
   }
 
@@ -307,6 +331,7 @@ function PcManagement() {
         </p>
 
         {removeError && <p className="mb-3 text-xs text-accent-blue">{removeError}</p>}
+        {intakeError && <p className="mb-3 text-xs text-accent-blue">{intakeError}</p>}
 
         <div className="flex flex-col gap-1.5">
           {devices.map((d) => {
@@ -366,9 +391,30 @@ function PcManagement() {
                 )}
                 <p className="text-2xs text-muted">
                   {d.registeredAt}
-                  {statusKnown && ` · 에이전트 ${isOnline ? '정상 동작 중' : '꺼져있음'}`}
+                  {statusKnown &&
+                    ` · 에이전트 ${!isOnline ? '꺼져있음' : d.acceptingTasks ? '정상 동작 중' : '작업 수신 꺼짐'}`}
                 </p>
               </div>
+
+              <Tooltip label={d.acceptingTasks ? '새 작업을 받고 있어요 — 눌러서 끄기' : '새 작업을 받지 않아요 — 눌러서 켜기'}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={d.acceptingTasks}
+                  aria-label={`${d.name} 작업 수신 ${d.acceptingTasks ? '끄기' : '켜기'}`}
+                  onClick={() => toggleTaskIntake(d)}
+                  disabled={updatingIntakeId === d.id}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
+                    d.acceptingTasks ? 'bg-accent-blue' : 'bg-foreground/20'
+                  }`}
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                      d.acceptingTasks ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </Tooltip>
 
               <button
                 type="button"
