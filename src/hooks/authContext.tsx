@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { User } from 'oidc-client-ts'
+import {
+  endClientSession,
+  isClientLogoutStorageEvent,
+  signalClientLogout,
+} from '../lib/authSession'
 import { cognitoSignOutUrl, userManager } from '../lib/oidc'
 
 type AuthStatus = 'checking' | 'authenticated' | 'anonymous'
@@ -18,7 +23,7 @@ const AuthContext = createContext<Auth | null>(null)
  * oidc-client-ts의 UserManager를 앱 상태로 감싼다. **라우터 바깥에서 감싸야 한다** —
  * RequireAuth/RequireGuest가 라우팅 중에 이 값을 읽는다.
  *
- * 세션 확인이 oidc-client-ts에서는 비동기(localStorage를 스토리지 인터페이스 뒤에 감춰서)라
+ * 세션 확인이 oidc-client-ts에서는 비동기(sessionStorage를 스토리지 인터페이스 뒤에 감춰서)라
  * 'checking' 상태가 필요하다 — 예전 로컬 플래그 시절엔 동기라 필요 없었다(lib/auth.ts 참고).
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -48,15 +53,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setStatus('anonymous')
     }
+    const onLogoutStorage = (event: StorageEvent) => {
+      if (!isClientLogoutStorageEvent(event)) return
+      void userManager.removeUser().finally(() => {
+        setUser(null)
+        setStatus('anonymous')
+      })
+    }
 
     userManager.events.addUserLoaded(onLoaded)
     userManager.events.addUserUnloaded(onUnloaded)
     userManager.events.addSilentRenewError(onSilentRenewError)
+    window.addEventListener('storage', onLogoutStorage)
     return () => {
       cancelled = true
       userManager.events.removeUserLoaded(onLoaded)
       userManager.events.removeUserUnloaded(onUnloaded)
       userManager.events.removeSilentRenewError(onSilentRenewError)
+      window.removeEventListener('storage', onLogoutStorage)
     }
   }, [])
 
@@ -64,11 +78,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status,
     accessToken: user?.access_token ?? null,
     login: () => userManager.signinRedirect(),
-    logout: async () => {
+    logout: () => {
       // signoutRedirect()는 표준 OIDC 로그아웃을 시도하는데 Cognito가 이걸 지원하지 않는다 —
-      // 로컬 세션만 먼저 지우고, Cognito 고유 로그아웃 URL로 직접 이동한다. (lib/oidc.ts 참고)
-      await userManager.removeUser()
-      window.location.href = cognitoSignOutUrl()
+      // refresh token을 먼저 폐기한 뒤 Cognito 고유 로그아웃 URL로 직접 이동한다.
+      return endClientSession({
+        revokeRefreshToken: () => userManager.revokeTokens(['refresh_token']),
+        removeUser: () => userManager.removeUser(),
+        redirectToLogout: () => {
+          try {
+            signalClientLogout(window.localStorage)
+          } finally {
+            window.location.href = cognitoSignOutUrl()
+          }
+        },
+      })
     },
   }
 
