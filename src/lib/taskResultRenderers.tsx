@@ -270,7 +270,9 @@ export function AiAgentUsageResultCard({ result }: { result: AiAgentUsageResult 
         </>
       )}
       <p className="text-xs text-muted">
-        {formatRelativeTime(result.oldestSessionAt)} ~ {formatRelativeTime(result.newestSessionAt)} 세션 기준
+        {result.totalSessions > 0 && result.oldestSessionAt && result.newestSessionAt
+          ? `${formatRelativeTime(result.oldestSessionAt)} ~ ${formatRelativeTime(result.newestSessionAt)} 세션 기준`
+          : '아직 사용 기록이 없어요.'}
       </p>
     </div>
   )
@@ -301,6 +303,9 @@ const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
   UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
   LOCATION_NOT_FOUND: '지역을 찾지 못했어요. 시·군 이름으로 다시 말씀해주세요.',
   CODE_AGENT_NOT_CONFIGURED: '이 PC에서 그 도구를 쓴 적이 없어요.',
+  WORKSPACE_NOT_FOUND: 'PC의 에이전트에서 분석할 프로젝트 폴더를 추가해주세요.',
+  INVALID_PARAMETERS: '입력값을 다시 확인해주세요.',
+  POLICY_DENIED: '요청을 처리하지 못했어요. 시간이 오래 걸리거나 실행 중 문제가 생겼을 수 있어요.',
 }
 
 export function taskErrorMessage(code: string | null): string {

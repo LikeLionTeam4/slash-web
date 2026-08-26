@@ -108,8 +108,8 @@ export interface AiAgentUsageResult {
   totalCachedTokens: number
   totalReasoningTokens: number | null
   totalTokens: number
-  oldestSessionAt: string
-  newestSessionAt: string
+  oldestSessionAt: string | null
+  newestSessionAt: string | null
   collectedAt: string
 }
 
