@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "test": "node scripts/test-webllm-summary.mjs",
+    "test:auth": "node scripts/test-auth-session.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

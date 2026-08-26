@@ -2,23 +2,32 @@
 //   - Authorization Code + PKCE만 쓴다 (Implicit 금지)
 //   - scope에 email이 반드시 있어야 한다 — 없으면 서버가 최초 로그인 때 사용자 레코드를
 //     못 만들어서 실패한다
-//   - 저장 위치는 원래 "Access Token은 메모리, Refresh Token만 localStorage"가 목표지만,
-//     계약서가 "P0 범위에서는 oidc-client-ts 기본값을 그대로 쓴다"고 명시했으므로 커스텀
-//     스토리지 분리 없이 WebStorageStateStore(localStorage) 기본값을 그대로 쓴다. 대신
-//     Access Token 수명을 60분으로 짧게 잡아(modules/cognito) 노출 시간을 줄인다.
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
+import { legacyOidcUserStorageKey } from './authSession'
 
 const region = import.meta.env.VITE_COGNITO_REGION
 const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID
+const authority = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`
+const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID
+const sessionStore = new WebStorageStateStore({ store: window.sessionStorage })
+
+// 예전 배포본이 localStorage에 남긴 access/id/refresh token을 새 저장소로 복사하지 않는다.
+// 정확한 이 앱의 OIDC User 키만 지우고 한 번 다시 로그인하게 한다.
+window.localStorage.removeItem(legacyOidcUserStorageKey(authority, clientId))
 
 export const userManager = new UserManager({
-  authority: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
-  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  authority,
+  client_id: clientId,
   redirect_uri: `${window.location.origin}/callback`,
   post_logout_redirect_uri: window.location.origin,
   response_type: 'code',
   scope: 'openid email profile',
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  userStore: sessionStore,
+  stateStore: sessionStore,
+  // Cognito revoke endpoint는 refresh token 폐기를 지원한다. 수동 logout에서 이 값만 요청한다.
+  revokeTokenTypes: ['refresh_token'],
+  // revoke/metadata/token endpoint가 응답하지 않아도 로그아웃을 무기한 막지 않는다.
+  requestTimeoutInSeconds: 10,
   // 만료 5분 전 선제 갱신(계약서 §5). 리프레시 토큰이 있으면 iframe 없이 그 토큰으로
   // 조용히 갱신한다.
   automaticSilentRenew: true,

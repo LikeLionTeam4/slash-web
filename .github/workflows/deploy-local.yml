@@ -42,6 +42,7 @@ jobs:
       - run: npm ci
 
       - run: npm test
+      - run: npm run test:auth
 
       # Cognito 값은 public 클라이언트라 secret이 아니다(Client ID에 secret 없음) —
       # Variables로 둔다. VITE_API_BASE_URL은 아직 배포된 slash-api가 없어(§ frontend-api-contract.md
