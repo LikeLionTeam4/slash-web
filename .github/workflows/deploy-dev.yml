@@ -35,6 +35,7 @@ jobs:
 
       - run: npm ci
 
+      - run: npm test
       - run: npm run test:auth
 
       - run: npm run build

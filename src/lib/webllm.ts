@@ -9,17 +9,23 @@
 // 모델에 의존하지 않는다.
 import { CreateMLCEngine, type MLCEngine, type InitProgressReport } from '@mlc-ai/web-llm'
 
+import {
+  generateValidatedWebLlmSummary,
+  WEBLLM_MODEL_ID,
+  WEBLLM_PROMPT_VERSION,
+} from './webllmSummary'
+
 // WebGPU 지원 여부만 확인할 때는 이 파일이 아니라 webgpuSupport.ts를 쓴다 — 그쪽은
 // @mlc-ai/web-llm을 안 끌어와서 번들이 안 커진다. 이 파일은 실제로 요약을 실행할 때만
 // SearchBar.tsx가 동적 import로 불러온다.
 export { isWebGpuSupported } from './webgpuSupport'
 
-export const MODEL_ID = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
+export const MODEL_ID = WEBLLM_MODEL_ID
 
 // 고정 시스템 프롬프트가 바뀌면 이 값을 올린다 — slash-docs#3 처리 원칙 2번(작업 이력에
 // "무엇으로 만든 결과인지" 남기기)이 요구하는 값이라, GENERATION_CONFIG처럼 프롬프트도
 // 버전으로 추적한다.
-export const PROMPT_VERSION = 'v1'
+export const PROMPT_VERSION = WEBLLM_PROMPT_VERSION
 
 // slash-docs#3 원칙 — "WebLLM은 대화 기억이 없는 단건 생성기로 사용한다": 매 요청 고정
 // 시스템 프롬프트 + 현재 입력만 쓰고, 이전 요청을 다음 요청에 넘기지 않는다. 편차를 줄이려고
@@ -29,6 +35,7 @@ const GENERATION_CONFIG = {
   temperature: 0,
   top_p: 1,
   seed: 0,
+  max_tokens: 256,
 } as const
 
 let enginePromise: Promise<MLCEngine> | null = null
@@ -56,24 +63,14 @@ export async function summarizeInBrowser(
   text: string,
   onProgress?: (progress: SummarizeProgress) => void,
 ): Promise<string> {
-  const engine = await getEngine((report) => onProgress?.({ phase: 'loading', report }))
+  return generateValidatedWebLlmSummary(text, async (messages) => {
+    const engine = await getEngine((report) => onProgress?.({ phase: 'loading', report }))
+    onProgress?.({ phase: 'generating' })
 
-  onProgress?.({ phase: 'generating' })
-
-  const response = await engine.chat.completions.create({
-    messages: [
-      {
-        role: 'system',
-        content: '다음 글을 한국어 3문장 이내로 요약해. 다른 설명 없이 요약문만 답해.',
-      },
-      { role: 'user', content: text },
-    ],
-    ...GENERATION_CONFIG,
+    const response = await engine.chat.completions.create({
+      messages,
+      ...GENERATION_CONFIG,
+    })
+    return response.choices[0]?.message?.content
   })
-
-  const summary = response.choices[0]?.message?.content
-  if (!summary) {
-    throw new Error('요약 결과가 비어 있습니다.')
-  }
-  return summary
 }

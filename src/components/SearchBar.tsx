@@ -30,6 +30,12 @@ import { createTaskRequest, submitBrowserSummaryResult, type TaskStatus } from '
 import { isWebGpuSupported } from '../lib/webgpuSupport'
 import type { SummarizeProgress } from '../lib/webllm'
 import {
+  isWebLlmSummaryError,
+  toWebLlmFailureCode,
+  WEBLLM_MODEL_ID,
+  WEBLLM_PROMPT_VERSION,
+} from '../lib/webllmSummary'
+import {
   withObjectParticle,
   TASK_STATUS_LABELS,
   LoadingIndicator,
@@ -437,7 +443,7 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     setBrowserSummaryTask({ phase: 'loading', progress: 0, message: '모델을 준비하고 있어요' })
     const startedAt = performance.now()
     try {
-      const { summarizeInBrowser, MODEL_ID, PROMPT_VERSION } = await import('../lib/webllm')
+      const { summarizeInBrowser } = await import('../lib/webllm')
       const summary = await summarizeInBrowser(text, (progress: SummarizeProgress) => {
         if (progress.phase === 'loading') {
           setBrowserSummaryTask({
@@ -452,8 +458,8 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       setBrowserSummaryTask({ phase: 'succeeded', summary })
       submitBrowserSummaryResult({
         inputLength: text.length,
-        modelId: MODEL_ID,
-        promptVersion: PROMPT_VERSION,
+        modelId: WEBLLM_MODEL_ID,
+        promptVersion: WEBLLM_PROMPT_VERSION,
         status: 'SUCCEEDED',
         summary,
         durationMs: Math.round(performance.now() - startedAt),
@@ -463,17 +469,17 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     } catch (err) {
       setBrowserSummaryTask({
         phase: 'failed',
-        message: '브라우저에서 요약하지 못했어요. 잠시 후 다시 시도해주세요.',
+        message: isWebLlmSummaryError(err)
+          ? err.message
+          : '브라우저에서 요약하지 못했어요. 잠시 후 다시 시도해주세요.',
       })
-      import('../lib/webllm').then(({ MODEL_ID, PROMPT_VERSION }) =>
-        submitBrowserSummaryResult({
-          inputLength: text.length,
-          modelId: MODEL_ID,
-          promptVersion: PROMPT_VERSION,
-          status: 'FAILED',
-          errorMessage: err instanceof Error ? err.message : '알 수 없는 오류',
-        }).catch(() => {}),
-      )
+      submitBrowserSummaryResult({
+        inputLength: text.length,
+        modelId: WEBLLM_MODEL_ID,
+        promptVersion: WEBLLM_PROMPT_VERSION,
+        status: 'FAILED',
+        errorMessage: toWebLlmFailureCode(err),
+      }).catch(() => {})
     }
   }
 
@@ -1075,7 +1081,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
           {browserSummaryTask.phase === 'generating' && <LoadingIndicator label="요약을 만들고 있어요" />}
           {browserSummaryTask.phase === 'succeeded' && (
             <div className="flex flex-col gap-2">
-              <p className="whitespace-pre-wrap text-sm text-foreground">{browserSummaryTask.summary}</p>
+              <p data-clarity-mask="true" className="whitespace-pre-wrap text-sm text-foreground">
+                {browserSummaryTask.summary}
+              </p>
               <p className="text-xs text-muted">이 브라우저에서 직접 요약했어요 · 원문이 서버로 전송되지 않았어요.</p>
               {browserSummaryTask.historySaveFailed && (
                 <p className="text-xs text-accent-blue">이력에는 남기지 못했어요 — 방금 받은 요약은 그대로예요.</p>

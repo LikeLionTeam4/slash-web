@@ -41,6 +41,7 @@ jobs:
 
       - run: npm ci
 
+      - run: npm test
       - run: npm run test:auth
 
       # Cognito 값은 public 클라이언트라 secret이 아니다(Client ID에 secret 없음) —
