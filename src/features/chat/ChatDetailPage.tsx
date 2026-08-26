@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router'
 import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
 import { CommandBadge } from '../../components/CommandBadge'
+import { ShareDialog } from '../../components/ShareDialog'
+import { ChatTitleMenu } from '../../components/ChatTitleMenu'
 import { ApiError } from '../../lib/apiClient'
 import {
   getTask,
@@ -30,6 +32,8 @@ export function ChatDetailPage() {
   const [copied, setCopied] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [titleMenuOpen, setTitleMenuOpen] = useState(false)
 
   useEffect(() => {
     if (!id) {
@@ -143,18 +147,29 @@ export function ChatDetailPage() {
   return (
     <div className="flex w-full max-w-3xl flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-hairline pb-4">
-        <button type="button" className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
-          <span className="truncate">{task.inputText}</span>
-          <ChevronDown size={16} className="shrink-0 text-muted" />
-        </button>
+        <div className="relative min-w-0">
+          <button
+            type="button"
+            onClick={() => setTitleMenuOpen((v) => !v)}
+            className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground"
+          >
+            {badgeLabel && <CommandBadge label={badgeLabel} />}
+            <span className="truncate">{bodyText || task.inputText}</span>
+            <ChevronDown size={16} className="shrink-0 text-muted" />
+          </button>
+          {titleMenuOpen && <ChatTitleMenu onClose={() => setTitleMenuOpen(false)} />}
+        </div>
         <button
           type="button"
+          onClick={() => setShareOpen(true)}
           className="flex shrink-0 items-center gap-1.5 rounded-full border border-hairline px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-raised"
         >
           <Share2 size={14} />
           공유
         </button>
       </div>
+
+      {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
 
       <div className="flex flex-1 flex-col gap-6 py-6">
         <div className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
