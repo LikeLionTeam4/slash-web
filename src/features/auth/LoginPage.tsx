@@ -29,7 +29,7 @@ export function LoginPage() {
 
   return (
     <div className="flex h-screen w-full bg-canvas font-sans text-foreground">
-      <div className="flex w-full flex-col px-10 py-8 lg:w-1/2">
+      <div className="flex w-full flex-col px-10 py-8">
         <button
           type="button"
           onClick={() => navigate(homePath)}
@@ -71,12 +71,6 @@ export function LoginPage() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="hidden flex-1 items-stretch p-3 lg:flex">
-        <div className="flex w-full items-center justify-center rounded-3xl border border-hairline bg-surface-raised">
-          <span className="text-sm text-muted">이미지 영역 (와이어프레임 placeholder)</span>
         </div>
       </div>
     </div>
