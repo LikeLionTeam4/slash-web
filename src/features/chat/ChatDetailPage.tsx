@@ -154,7 +154,9 @@ export function ChatDetailPage() {
             className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground"
           >
             {badgeLabel && <CommandBadge label={badgeLabel} />}
-            <span className="truncate">{bodyText || task.inputText}</span>
+            <span data-clarity-mask="true" className="truncate">
+              {bodyText || task.inputText}
+            </span>
             <ChevronDown size={16} className="shrink-0 text-muted" />
           </button>
           {titleMenuOpen && <ChatTitleMenu onClose={() => setTitleMenuOpen(false)} />}
@@ -173,7 +175,7 @@ export function ChatDetailPage() {
 
       <div className="flex flex-1 flex-col gap-6 py-6">
         <div className="ml-auto max-w-lg rounded-2xl border border-hairline bg-surface p-4">
-          <p className="text-sm text-foreground">
+          <p data-clarity-mask="true" className="text-sm text-foreground">
             {badgeLabel && (
               <span className="mr-2">
                 <CommandBadge label={badgeLabel} />
@@ -216,7 +218,10 @@ export function ChatDetailPage() {
                 task.taskType !== 'CODE_ANALYSIS' && (
                 <p className="text-control leading-relaxed text-foreground">{answerText}</p>
               )}
-              <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
+              <div
+                data-clarity-mask="true"
+                className="mt-3 rounded-xl border border-hairline bg-surface p-3.5"
+              >
                 <ResultCard taskType={task.taskType} result={task.result} />
               </div>
             </>

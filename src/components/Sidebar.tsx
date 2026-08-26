@@ -178,7 +178,9 @@ export function Sidebar({
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-surface-raised"
                 >
                   <CommandBadge label={item.commandLabel} />
-                  <span className="truncate">{item.text}</span>
+                  <span data-clarity-mask="true" className="truncate">
+                    {item.text}
+                  </span>
                 </button>
               ))}
             </div>

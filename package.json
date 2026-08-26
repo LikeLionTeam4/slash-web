@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node scripts/test-webllm-summary.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

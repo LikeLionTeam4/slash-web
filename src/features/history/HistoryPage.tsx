@@ -122,7 +122,9 @@ export function HistoryPage() {
               >
                 <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
                   <CommandBadge label={entry.commandLabel} />
-                  <span className="truncate">{entry.text}</span>
+                  <span data-clarity-mask="true" className="truncate">
+                    {entry.text}
+                  </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted">{entry.timeLabel}</span>
               </button>

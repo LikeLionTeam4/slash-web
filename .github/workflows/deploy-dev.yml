@@ -35,6 +35,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm test
+
       - run: npm run build
         env:
           # slash-infra: environments/dev/cognito terraform output 값
