@@ -177,7 +177,7 @@ export function ChatDetailPage() {
           <button
             type="button"
             onClick={() => setTitleMenuOpen((v) => !v)}
-            className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground"
+            className="flex w-full min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground"
           >
             {badgeLabel && <CommandBadge label={badgeLabel} />}
             <span data-clarity-mask="true" className="min-w-0 truncate">
