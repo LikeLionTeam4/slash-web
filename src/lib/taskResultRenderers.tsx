@@ -92,15 +92,20 @@ type TextSummaryResultUnion = TextSummaryResult | BrowserTextSummaryResult
  *  브라우저 WebLLM은 이 브라우저에서 요약할 때 보여주던 것과 같은 캡션을 쓴다
  *  (SearchBar.tsx의 실시간 표시와 이력 화면이 같은 문구를 보여줘야 한다). */
 export function TextSummaryResultCard({ result }: { result: TextSummaryResultUnion }) {
+  // 실행 위치마다 결과 필드가 다르다 — CPU 추출(지금 기본값)은 `model`이 아예 없고 `engine`/
+  // `algorithm`을 대신 갖는다(frontend-api-contract.md §TEXT_SUMMARY). `model`이 있을 때만
+  // 문구를 만들고, 없으면 계약이 말한 대로("summary만 그리면 된다") 자막을 생략한다.
   const caption =
     'modelId' in result
       ? '이 브라우저에서 직접 요약했어요 · 원문이 서버로 전송되지 않았어요.'
-      : `${result.model}이(가) 요약했어요.`
+      : 'model' in result
+        ? `${result.model}이(가) 요약했어요.`
+        : null
 
   return (
     <div className="flex flex-col gap-2">
       <p className="whitespace-pre-wrap text-sm text-foreground">{result.summary}</p>
-      <p className="text-xs text-muted">{caption}</p>
+      {caption && <p className="text-xs text-muted">{caption}</p>}
     </div>
   )
 }
