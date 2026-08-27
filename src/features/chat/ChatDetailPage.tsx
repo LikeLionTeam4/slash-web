@@ -21,6 +21,17 @@ const ACTION_BUTTON_CLASS =
 
 const POLL_INTERVAL_MS = 2000
 
+// 이력 목록의 requestSummary가 80자로 자르는 것과 같은 규칙 — 같은 작업이 목록과 상세에서
+// 다른 길이로 보이지 않게 맞춘다(slash-api V015 마이그레이션과 동일한 절단 규칙).
+const SUMMARY_TITLE_MAX_CHARS = 80
+
+function truncateForTitle(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  return normalized.length > SUMMARY_TITLE_MAX_CHARS
+    ? `${normalized.slice(0, SUMMARY_TITLE_MAX_CHARS)}…`
+    : normalized
+}
+
 // 백엔드엔 "대화(멀티턴)" 개념이 없다 — 요청 1개 = task 1개 = 답변 1개다. 그래서 이 화면은 한 번의
 // 질문-답변만 보여주고, 이어서 더 묻는 입력창은 두지 않는다(§ dev 코멘트). 이어 묻고 싶으면
 // "다시 생성"으로 새 task를 만들거나 /new로 돌아가 새로 시작한다.
@@ -144,6 +155,21 @@ export function ChatDetailPage() {
   const badgeLabel = isCommand ? commandToken.slice(1) : task.taskType && TASK_TYPE_COMMAND_LABELS[task.taskType]
   const timeLabel = formatRelativeTime(task.completedAt ?? task.createdAt)
 
+  // inputTextIsOriginal이 false면 inputText는 NOT NULL 제약을 메우려고 서버가 남긴 자리표시자일
+  // 뿐, 그대로 그리라고 만든 값이 아니다(slash-api#87) — 원문 글자 수(parameters.inputLength)로
+  // 문장을 조립해 대신 쓴다.
+  const inputLength = typeof task.parameters?.inputLength === 'number' ? task.parameters.inputLength : null
+  const summaryRequestNote = !task.inputTextIsOriginal && inputLength != null ? `원문 ${inputLength}자를 요약했어요.` : null
+  // 제목 자리는 이력 목록의 requestSummary와 같은 관례를 따른다 — succeeded 요약은 원문 발췌
+  // 대신 결과 앞부분을 쓴다(frontend-api-contract.md "requestSummary는 항상 있습니다").
+  const summaryExcerpt =
+    !task.inputTextIsOriginal && task.taskType === 'TEXT_SUMMARY' && task.result && 'summary' in task.result
+      ? truncateForTitle(task.result.summary)
+      : null
+
+  const titleText = summaryExcerpt ?? summaryRequestNote ?? bodyText ?? task.inputText
+  const bubbleText = summaryRequestNote ?? bodyText ?? task.inputText
+
   return (
     <div className="flex w-full max-w-3xl flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-hairline pb-4">
@@ -155,7 +181,7 @@ export function ChatDetailPage() {
           >
             {badgeLabel && <CommandBadge label={badgeLabel} />}
             <span data-clarity-mask="true" className="truncate">
-              {bodyText || task.inputText}
+              {titleText}
             </span>
             <ChevronDown size={16} className="shrink-0 text-muted" />
           </button>
@@ -181,7 +207,7 @@ export function ChatDetailPage() {
                 <CommandBadge label={badgeLabel} />
               </span>
             )}
-            {bodyText || task.inputText}
+            {bubbleText}
           </p>
         </div>
 

@@ -71,11 +71,25 @@ export interface WeatherLookupResult {
   observedAt: string
 }
 
-// slash-infra 이슈 #42 검증 중 실측된 형태(slash-api PR #42 `TEXT_SUMMARY`, slash-llm 연동).
-export interface TextSummaryResult {
+// slash-api docs/frontend-api-contract.md §TEXT_SUMMARY — CPU 추출 요약(EXTRACTIVE), 지금 기본값.
+export interface ExtractiveTextSummaryResult {
+  summary: string
+  engine: string
+  algorithm: string
+  algorithmVersion: string
+  inputSentenceCount: number
+  outputSentenceCount: number
+  durationMs: number
+}
+
+// GPU 모델(Gemma) 이력에만 남아 있는 형태 — 지금은 새로 생기지 않는다(§TEXT_SUMMARY).
+// 이 형태만 `model` 필드를 갖는다 — 기본값인 위 EXTRACTIVE는 대신 `engine`/`algorithm`을 쓴다.
+export interface GemmaTextSummaryResult {
   summary: string
   model: string
 }
+
+export type TextSummaryResult = ExtractiveTextSummaryResult | GemmaTextSummaryResult
 
 // executionTarget이 BROWSER일 때의 결과 형태 — submitBrowserSummaryResult로 제출한 그대로
 // 되돌아온다(frontend-api-contract.md "브라우저에서 이미 끝낸 요약 제출하기").
@@ -138,6 +152,10 @@ export interface TaskDetail {
    *  그때는 "다시 생성"이 원문 없이 재접수를 시도해 조용히 실패하므로 버튼을 막는다.
    *  (slash-api#84·#87, slash-web#67) */
   inputTextIsOriginal: boolean
+  /** `inputTextIsOriginal`이 `false`일 때 원문 대신 남는 부가정보(`inputLength` 등). `inputText`는
+   *  NOT NULL 제약을 메우는 자리표시자일 뿐 화면에 그대로 그리라고 만든 값이 아니라서, 이 값으로
+   *  대체 문구를 조립한다(slash-api#87, slash-web#67). */
+  parameters: Record<string, unknown> | null
   createdAt: string
   /** 끝난 작업만 있다. */
   completedAt?: string
