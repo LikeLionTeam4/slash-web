@@ -180,7 +180,7 @@ export function ChatDetailPage() {
             className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground"
           >
             {badgeLabel && <CommandBadge label={badgeLabel} />}
-            <span data-clarity-mask="true" className="truncate">
+            <span data-clarity-mask="true" className="min-w-0 truncate">
               {titleText}
             </span>
             <ChevronDown size={16} className="shrink-0 text-muted" />
