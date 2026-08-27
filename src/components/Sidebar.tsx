@@ -43,13 +43,11 @@ export function Sidebar({
   onMobileOpenChange,
   onOpenSettings,
   onOpenGuide,
-  onOpenShortcuts,
 }: {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
   onOpenSettings: (category?: SettingsCategoryId) => void
   onOpenGuide: () => void
-  onOpenShortcuts: () => void
 }) {
   const [collapsed, setCollapsed] = useState(true)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -225,7 +223,6 @@ export function Sidebar({
             <ProfileMenu
               email={email ?? ''}
               onOpenSettings={onOpenSettings}
-              onOpenShortcuts={onOpenShortcuts}
               // logout()이 Cognito 로그아웃 엔드포인트로 전체 페이지 리다이렉트를 일으키므로
               // 이후 navigate가 필요 없다 — 브라우저가 이미 이 페이지를 떠난다.
               onLogout={() => {
