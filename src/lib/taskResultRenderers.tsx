@@ -298,6 +298,9 @@ const TASK_ERROR_MESSAGES: Partial<Record<string, string>> = {
   FILE_NOT_FOUND: '파일을 찾을 수 없어요. 그 사이 옮겨졌거나 지워진 것 같아요.',
   AGENT_REJECTED: 'PC가 이 요청을 받지 않았어요.',
   AGENT_TASK_FAILED: 'PC에서 실행이 끝나지 못했어요.',
+  // AGENT_TASK_FAILED와 같은 자리 — 실행 주체가 PC 대신 브라우저(WebLLM)일 뿐이다
+  // (frontend-api-contract.md §4). 사유를 알 수 없을 때만 오는 코드라 원인을 짐작해 쓰지 않는다.
+  BROWSER_TASK_FAILED: '이 브라우저에서 요약을 끝내지 못했어요.',
   DEVICE_REVOKED: 'PC 등록이 해제됐어요. 다시 등록해주세요.',
   NLU_UNAVAILABLE: '잠시 후 다시 시도해주세요.',
   UPSTREAM_UNAVAILABLE: '외부 서비스에 문제가 있어요.',
