@@ -134,6 +134,10 @@ export interface TaskDetail {
   correlationId?: string | null
   /** 사용자가 접수 시점에 친 원문. 채팅 상세 화면의 사용자 말풍선·"다시 생성"에 쓴다. */
   inputText: string
+  /** `inputText`가 원문 그대로인지. 요약이 끝나면 원문 대신 안내 문구가 들어가 `false`다 —
+   *  그때는 "다시 생성"이 원문 없이 재접수를 시도해 조용히 실패하므로 버튼을 막는다.
+   *  (slash-api#84·#87, slash-web#67) */
+  inputTextIsOriginal: boolean
   createdAt: string
   /** 끝난 작업만 있다. */
   completedAt?: string
