@@ -99,7 +99,7 @@ export function ChatDetailPage() {
   }
 
   const regenerate = async () => {
-    if (!task || regenerating) return
+    if (!task || regenerating || !task.inputTextIsOriginal) return
     setRegenerating(true)
     try {
       const created = await createTaskRequest(task.inputText)
@@ -251,11 +251,11 @@ export function ChatDetailPage() {
                   <ThumbsDown size={15} />
                 </button>
               </Tooltip>
-              <Tooltip label="다시 생성">
+              <Tooltip label={task.inputTextIsOriginal ? '다시 생성' : '원문이 남아 있지 않아 다시 생성할 수 없어요'}>
                 <button
                   type="button"
                   onClick={regenerate}
-                  disabled={regenerating}
+                  disabled={regenerating || !task.inputTextIsOriginal}
                   className={`${ACTION_BUTTON_CLASS} disabled:opacity-40`}
                 >
                   <RotateCcw size={15} />
