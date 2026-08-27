@@ -504,16 +504,16 @@ export function SettingsDialog({
         <div className="w-48 shrink-0 space-y-0.5 border-r border-hairline p-2">
           {CATEGORIES.map(({ id, label, icon: Icon, disabled }) =>
             disabled ? (
-              <Tooltip key={id} label="아직 준비 중이에요">
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted opacity-50"
-                >
-                  <Icon size={16} />
-                  {label}
-                </button>
-              </Tooltip>
+              <button
+                key={id}
+                type="button"
+                disabled
+                title="아직 준비 중이에요"
+                className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted opacity-50"
+              >
+                <Icon size={16} />
+                {label}
+              </button>
             ) : (
               <button
                 key={id}
