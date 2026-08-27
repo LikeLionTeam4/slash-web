@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Settings, Keyboard, LogOut } from 'lucide-react'
+import { Settings, LogOut } from 'lucide-react'
 
 function KeyCombo({ keys }: { keys: string[] }) {
   return (
@@ -43,13 +43,11 @@ function MenuItem({
 export function ProfileMenu({
   email,
   onOpenSettings,
-  onOpenShortcuts,
   onLogout,
   onClose,
 }: {
   email: string
   onOpenSettings: () => void
-  onOpenShortcuts: () => void
   onLogout: () => void
   onClose: () => void
 }) {
@@ -66,15 +64,6 @@ export function ProfileMenu({
             trailing={<KeyCombo keys={['⌘', ',']} />}
             onClick={() => {
               onOpenSettings()
-              onClose()
-            }}
-          />
-          <MenuItem
-            icon={Keyboard}
-            label="단축키"
-            trailing={<KeyCombo keys={['⌘', '/']} />}
-            onClick={() => {
-              onOpenShortcuts()
               onClose()
             }}
           />

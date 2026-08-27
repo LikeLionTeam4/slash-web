@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
-import { ChevronDown, Share2, Copy, Check, Volume2, Square, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
+import { ChevronDown, Share2, Copy, Check, Volume2, Square, RotateCcw } from 'lucide-react'
 import { Tooltip } from '../../components/Tooltip'
 import { CommandBadge } from '../../components/CommandBadge'
 import { ShareDialog } from '../../components/ShareDialog'
@@ -265,16 +265,6 @@ export function ChatDetailPage() {
               <Tooltip label={speaking ? '정지' : '읽어주기'}>
                 <button type="button" onClick={toggleSpeak} className={ACTION_BUTTON_CLASS}>
                   {speaking ? <Square size={15} /> : <Volume2 size={15} />}
-                </button>
-              </Tooltip>
-              <Tooltip label="좋아요">
-                <button type="button" className={ACTION_BUTTON_CLASS}>
-                  <ThumbsUp size={15} />
-                </button>
-              </Tooltip>
-              <Tooltip label="별로예요">
-                <button type="button" className={ACTION_BUTTON_CLASS}>
-                  <ThumbsDown size={15} />
                 </button>
               </Tooltip>
               <Tooltip label={task.inputTextIsOriginal ? '다시 생성' : '원문이 남아 있지 않아 다시 생성할 수 없어요'}>

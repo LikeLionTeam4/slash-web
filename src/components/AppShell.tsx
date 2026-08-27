@@ -4,7 +4,6 @@ import { PanelLeft } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { SettingsDialog } from './SettingsDialog'
 import { CommandGuideDialog } from './CommandGuideDialog'
-import { ShortcutsDialog } from './ShortcutsDialog'
 import { OnboardingDialog } from './OnboardingDialog'
 import { useAppearance } from '../hooks/appearanceContext'
 import { AgentStatusProvider } from '../hooks/agentStatusContext'
@@ -13,7 +12,6 @@ import { DEFAULT_SETTINGS_CATEGORY, isSettingsCategoryId, type SettingsCategoryI
 
 const SETTINGS_HASH_PREFIX = '#settings/'
 const GUIDE_HASH = '#guide'
-const SHORTCUTS_HASH = '#shortcuts'
 const ONBOARDING_STORAGE_KEY = 'slash-onboarding-seen'
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -52,10 +50,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const openGuide = () => navigate({ pathname: location.pathname, hash: GUIDE_HASH })
   const closeGuide = () => navigate({ pathname: location.pathname }, { replace: true })
 
-  const shortcutsOpen = location.hash === SHORTCUTS_HASH
-  const openShortcuts = () => navigate({ pathname: location.pathname, hash: SHORTCUTS_HASH })
-  const closeShortcuts = () => navigate({ pathname: location.pathname }, { replace: true })
-
   return (
     <AgentStatusProvider>
       <CurrentUserProvider>
@@ -65,7 +59,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           onMobileOpenChange={setMobileNavOpen}
           onOpenSettings={openSettings}
           onOpenGuide={openGuide}
-          onOpenShortcuts={openShortcuts}
         />
         {/* 좁은 화면에서 사이드바를 여는 유일한 손잡이 — 사이드바 자체는 화면 밖에 있다. */}
         <button
@@ -90,7 +83,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         )}
         {guideOpen && <CommandGuideDialog onClose={closeGuide} />}
-        {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
         {onboardingOpen && <OnboardingDialog onClose={dismissOnboarding} />}
       </div>
       </CurrentUserProvider>
