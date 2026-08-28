@@ -433,8 +433,10 @@ function PcManagement() {
         )}
       </div>
 
-      {/* slash-agent에 아직 실제 배포판이 없어서, 지금은 릴리스가 올라올 실제 장소로 보낸다 —
-          클릭해도 아무 일도 안 일어나는 죽은 버튼보다, 어디로 가는지 정직한 링크가 낫다. */}
+      {/* 실행기 배포판이 올라오는 GitHub Releases로 보낸다. 웹이 설치 파일을 직접 호스팅하지
+          않는 이유는, OS별 패키지(macOS arm64 / Windows x64)와 버전 갱신을 실행기 저장소의
+          릴리스 파이프라인이 이미 관리하기 때문이다 — 여기서 다시 들고 있으면 버전이 어긋난다.
+          경로의 slash-agent는 개명 전 이름이며 GitHub이 slash-runner로 리다이렉트한다. */}
       <a
         href="https://github.com/LikeLionTeam4/slash-agent/releases"
         target="_blank"
@@ -457,7 +459,7 @@ function PcManagement() {
 /**
  * `/파일` 검색 대상 폴더 안내. 폴더는 이 화면(웹)이 아니라 PC에 설치한 로컬 에이전트 앱에서
  * 관리한다(에이전트의 트레이 아이콘 → 색인 폴더 관리 창) — 그 창을 여기서 원격으로 열게
- * 하려면 slash-api/slash-agent 쪽에 새 메시지 타입이 필요해서(WSS로 이미 연결된 채널 재사용)
+ * 하려면 slash-api/slash-runner 쪽에 새 메시지 타입이 필요해서(WSS로 이미 연결된 채널 재사용)
  * 이번 PR 범위(웹 단독 변경) 밖이다. "지정 PC 관리" 탭도 페어링 상태만 보여줄 뿐 폴더는 없어서
  * 그리로 보내는 버튼은 만들지 않는다 — 실제로 폴더를 관리할 수 있는 곳(에이전트 트레이 아이콘)만
  * 문장으로 안내한다.

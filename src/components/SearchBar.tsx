@@ -1,3 +1,14 @@
+// 명령 입력창 — 이 앱에서 사용자가 가장 오래 머무는 화면이다.
+//
+// 세 가지를 한 입력창에서 받는다.
+//   1. 자유 텍스트 자연어      → slash-api로 보내 NLU가 분류한다
+//   2. `/` 슬래시 명령          → 명령 트리를 띄워 경로·값을 나눠 받는다
+//   3. 딥링크형 명령(`/네이버`) → 서버를 거치지 않고 외부 URL로 바로 연다
+//
+// `/요약`만 예외다. 이 브라우저가 WebGPU를 쓸 수 있으면 서버 접수 자체를 건너뛰고
+// WebLLM으로 여기서 요약한 뒤 결과만 제출한다 — 원문을 서버에 보내지 않기 위한 것이다
+// (slash-docs#3 "명시적인 브라우저 요약은 원문을 브라우저에 유지한다").
+// WebGPU가 없으면 이 분기를 타지 않고 기존 서버 경로로 그대로 떨어진다.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import {
