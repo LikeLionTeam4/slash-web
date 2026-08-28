@@ -1,3 +1,5 @@
+// 로그인 이후 모든 화면이 공유하는 레이아웃 — 사이드바와 본문 영역의 뼈대다.
+// 라우팅되는 각 페이지는 이 안에 본문으로 들어간다.
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft } from 'lucide-react'

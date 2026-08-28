@@ -1,3 +1,6 @@
+// 좌측 내비게이션 — 새 대화, 지난 요청 이력, 설정 진입점을 담는다.
+// 이력은 slash-api의 작업 원장을 그대로 읽는다. 즉시 끝나는 요청도 원장에 남으므로
+// 화면에 보이는 목록이 실제 사용 내역과 어긋나지 않는다.
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { PanelLeft, Plus, History, LayoutDashboard, Calendar, Command, Download } from 'lucide-react'

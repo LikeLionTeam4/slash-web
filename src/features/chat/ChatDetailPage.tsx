@@ -1,3 +1,11 @@
+// 작업 한 건의 상세 화면 — 요청·진행·결과를 대화 형태로 보여준다.
+//
+// 서버 상태를 폴링해 그린다. 작업이 끝나기까지 시간이 걸리는 명령(`/코드`는 최대
+// 300초)이 있어, 접수 응답만으로는 결과를 보여줄 수 없기 때문이다.
+//
+// 요약이 성공하면 서버가 원문을 지우므로(slash-docs#3 원문 기본 미저장) `inputText`가
+// 사용자가 친 글이 아니라 안내 문구로 바뀐다. 화면이 그 문구를 파싱하지 않도록
+// 응답의 `inputTextIsOriginal`로 판단한다 — 거짓이면 재생성도 할 수 없다.
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { ChevronDown, Share2, Copy, Check, Volume2, Square, RotateCcw } from 'lucide-react'

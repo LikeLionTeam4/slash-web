@@ -232,7 +232,7 @@ const CODE_ADAPTER_LABELS: Record<CodeAnalysisResult['codeAdapter'], string> = {
 }
 
 /** CODE_ANALYSIS 결과 카드 — 등록한 프로젝트 폴더를 읽기 전용으로 분석한 답. turns는 CLI가
- *  준 값을 못 읽으면 null로 온다(slash-agent code_adapters.py). */
+ *  준 값을 못 읽으면 null로 온다(slash-runner code_adapters.py). */
 export function CodeAnalysisResultCard({ result }: { result: CodeAnalysisResult }) {
   const turnsLabel = result.turns !== null ? ` · ${result.turns}턴` : ''
   return (

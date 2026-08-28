@@ -100,7 +100,7 @@ export interface BrowserTextSummaryResult {
   durationMs?: number
 }
 
-// slash-api docs/frontend-api-contract.md §CODE_ANALYSIS. slash-agent의 code_adapters.py가
+// slash-api docs/frontend-api-contract.md §CODE_ANALYSIS. slash-runner의 code_adapters.py가
 // 실제로 만드는 필드 그대로다 — turns는 CLI가 준 값을 못 읽으면 null로 온다.
 export interface CodeAnalysisResult {
   codeAdapter: 'CLAUDE_CODE' | 'CODEX'
