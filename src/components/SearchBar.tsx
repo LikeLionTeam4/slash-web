@@ -938,12 +938,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
                   </button>
                 </Tooltip>
               ) : (
-                <Tooltip label="음성 모드">
+                <Tooltip label="음성 모드는 아직 준비 중이에요">
                   <button
                     type="button"
+                    disabled
                     aria-label="음성 모드"
-                    onClick={() => alert('준비 중입니다.')}
-                    className="shrink-0 text-muted transition-colors hover:text-foreground"
+                    className="shrink-0 cursor-not-allowed text-muted opacity-50"
                   >
                     <AudioLines size={18} />
                   </button>

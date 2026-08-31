@@ -72,7 +72,9 @@ export function ModelPickerPanel({
   if (view === 'services') {
     return (
       <div className="overflow-hidden rounded-xl border border-hairline bg-surface text-left">
-        <p className="border-b border-hairline px-4 py-2 text-xs text-muted">답변에 사용할 서비스</p>
+        <p className="border-b border-hairline px-4 py-2 text-xs text-muted">
+          답변에 사용할 서비스 · 아직 실제 답변에는 반영되지 않아요
+        </p>
         {SERVICES.map((s, i) => (
           <button
             key={s.id}

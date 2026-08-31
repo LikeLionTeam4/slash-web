@@ -41,7 +41,12 @@ export function CommandGuideDialog({ onClose }: { onClose: () => void }) {
                   <code className="shrink-0 rounded-[8px] bg-foreground/8 px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
                     /{node.id}
                   </code>
-                  <span className="text-sm text-muted">{node.description}</span>
+                  <span className="text-sm text-muted">
+                    {node.description}
+                    {/* 선택은 되지만 실제 요청에는 아직 반영되지 않는다(어떤 모델을 골라도
+                        요청 바디에 실리지 않음) — /네이버/길찾기와 같은 이유로 구분 표시. */}
+                    {node.id === '모델' && ' (아직 실제 답변에는 반영되지 않아요)'}
+                  </span>
                 </div>
                 {node.children?.map((child) => (
                   <div key={child.id} className="flex items-start gap-3 border-t border-hairline px-4 py-2.5 pl-8">
