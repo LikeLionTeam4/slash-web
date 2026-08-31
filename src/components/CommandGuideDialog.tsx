@@ -48,7 +48,12 @@ export function CommandGuideDialog({ onClose }: { onClose: () => void }) {
                     <code className="shrink-0 rounded-[8px] bg-foreground/8 px-2 py-0.5 font-mono text-xs text-foreground">
                       /{node.id}/{child.id}
                     </code>
-                    <span className="text-sm text-muted">{child.description}</span>
+                    <span className="text-sm text-muted">
+                      {child.description}
+                      {/* 출발지·도착지 칩만 모으고 어디에도 보내지 않는다(SearchBar.tsx submitCommand
+                          TODO#6) — 다른 명령과 똑같이 보이면 왜 안 되는지 구분이 안 된다. */}
+                      {node.id === '네이버' && child.id === '길찾기' && ' (아직 준비 중이에요)'}
+                    </span>
                   </div>
                 ))}
               </div>

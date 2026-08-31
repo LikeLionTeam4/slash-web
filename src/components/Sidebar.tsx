@@ -64,6 +64,15 @@ export function Sidebar({
   const profileLabel = displayName ?? '고객'
   const avatarLetter = (displayName ?? email ?? 'S').charAt(0).toUpperCase()
   const [recentEntries, setRecentEntries] = useState<HistoryEntry[]>([])
+  // 아직 라우트가 없는 nav 항목(일정)을 눌렀을 때 잠깐 보여주는 안내 — 죽은 클릭 대신 클릭한
+  // 라벨을 기억해뒀다가 2초 뒤 스스로 사라진다.
+  const [placeholderNavNotice, setPlaceholderNavNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!placeholderNavNotice) return
+    const id = window.setTimeout(() => setPlaceholderNavNotice(null), 2000)
+    return () => window.clearTimeout(id)
+  }, [placeholderNavNotice])
 
   // 사이드바는 상시 노출되는 크롬이라 오류를 문구로 알리지 않는다 — 실패하면 그냥 빈 목록으로 둔다.
   useEffect(() => {
@@ -138,19 +147,23 @@ export function Sidebar({
           {NAV_ITEMS.map(({ icon: Icon, label, path }) => {
             const active = path !== undefined && location.pathname === path
             return (
-              <button
-                key={label}
-                type="button"
-                onClick={path ? () => navigate(path) : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? 'bg-foreground/8 text-foreground'
-                    : 'text-muted hover:bg-surface-raised hover:text-foreground'
-                } ${rail ? 'justify-center' : ''}`}
-              >
-                <Icon size={17} />
-                {!rail && label}
-              </button>
+              <div key={label}>
+                <button
+                  type="button"
+                  onClick={path ? () => navigate(path) : () => setPlaceholderNavNotice(label)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    active
+                      ? 'bg-foreground/8 text-foreground'
+                      : 'text-muted hover:bg-surface-raised hover:text-foreground'
+                  } ${rail ? 'justify-center' : ''}`}
+                >
+                  <Icon size={17} />
+                  {!rail && label}
+                </button>
+                {!rail && placeholderNavNotice === label && (
+                  <p className="px-3 pb-1 pt-0.5 text-xs text-muted">준비 중이에요.</p>
+                )}
+              </div>
             )
           })}
           <button
