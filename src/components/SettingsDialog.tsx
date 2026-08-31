@@ -606,13 +606,16 @@ export function SettingsDialog({
 
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-muted">검색 결과 글꼴</span>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-1.5 text-sm text-foreground"
-                  >
-                    Pretendard
-                    <ChevronDown size={14} />
-                  </button>
+                  <Tooltip label="검색 결과 글꼴 설정은 아직 준비 중이에요">
+                    <button
+                      type="button"
+                      disabled
+                      className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-hairline px-3 py-1.5 text-sm text-foreground opacity-50"
+                    >
+                      Pretendard
+                      <ChevronDown size={14} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
 
