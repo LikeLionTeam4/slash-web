@@ -118,6 +118,10 @@ type BrowserSummaryTaskState =
 // 입력창이 가로로 무한히 늘어나지 않도록 세로 auto-resize의 상한 — 대략 8줄.
 const TEXTAREA_MAX_HEIGHT_PX = 192
 
+// pc-runner(로컬 에이전트)가 켜져 있어야 실제로 실행되는 명령 — deviceId로 PC까지 가는 넷뿐이다
+// (날씨·요약은 서버가 직접 처리해 해당 없음, tasks.ts의 TaskHistoryItem.deviceId 주석 참고).
+const DEVICE_DEPENDENT_COMMANDS = new Set(['파일', '상태', '코드', '사용량'])
+
 export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; operands: string[] } }) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -210,6 +214,28 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const modelDestination = currentModelLabel.startsWith(currentServiceLabel)
     ? currentModelLabel
     : `${currentServiceLabel} · ${currentModelLabel}`
+
+  // PC 의존 명령에서 공통으로 쓰는 비차단 안내 — 꺼져 있어도 요청은 접수되고(WAITING_FOR_DEVICE로
+  // 쌓였다가) PC가 켜지면 자동 실행되므로 제출을 막지 않고 미리 알려주기만 한다.
+  const deviceOfflineHint = (
+    <p className="text-xs text-accent-blue">
+      로컬 에이전트가 꺼져 있어요 · 켜지면 자동으로 실행돼요 ·{' '}
+      <button
+        type="button"
+        onClick={() => navigate({ pathname: location.pathname, hash: '#settings/plugins' })}
+        className="underline underline-offset-2 hover:brightness-110"
+      >
+        PC 관리에서 확인하기
+      </button>
+    </p>
+  )
+  // /코드처럼 전용 패널 없이 isGenericCommand 경로를 타는 PC 의존 명령(지금은 코드뿐 — 파일·상태는
+  // 전용 패널에서, 사용량은 아래 suggestions 목록에서 각자 안내한다).
+  const showDeviceOfflineCommandHint =
+    agentStatus === 'offline' &&
+    isGenericCommand &&
+    DEVICE_DEPENDENT_COMMANDS.has(commandMode!.path[0]) &&
+    freeTextTask.phase === 'idle'
 
   const showModelPicker = commandMode === null && trimmed === '/모델'
   const showStatusCommand = commandMode === null && trimmed === '/상태'
@@ -545,11 +571,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       submitCommand()
       return
     }
-    if (isFreeText) {
-      flashSubmitButton()
-      runFreeTextCommand(trimmed)
-      return
-    }
+    // 슬래시 없는 자유 입력은 아직 서버가 처리하지 않는다(slash-nlu는 P0 4개 명령 자연어 인식만
+    // 지원하고, 일반 질의응답(GENERAL_CHAT)은 계약에 없다) — Enter를 눌러도 접수하지 않는다.
+    if (isFreeText) return
     if (suggestions) {
       selectSuggestion(suggestions.pathIds, suggestions.options[highlightIndex] ?? suggestions.options[0])
     }
@@ -965,6 +989,11 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
               <span className="shrink-0 truncate text-xs text-muted">{opt.description}</span>
             </button>
           ))}
+          {/* /사용량은 클로드·코덱스를 고르는 즉시 제출돼(submitOnSelect) 값을 치는 단계가 따로
+              없다 — 그래서 다른 PC 의존 명령과 달리 여기, 선택하기 전인 이 목록에서 미리 알린다. */}
+          {suggestions!.pathIds[0] === '사용량' && agentStatus === 'offline' && (
+            <div className="border-t border-hairline px-4 py-2">{deviceOfflineHint}</div>
+          )}
         </div>
       )}
 
@@ -1036,7 +1065,10 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
       {showFileSearch && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface text-left">
           {fileSearchTask.phase === 'idle' ? (
-            <p className="px-4 py-3 text-sm text-muted">Enter를 누르면 등록된 PC에서 찾아요.</p>
+            <div className="flex flex-col gap-1 px-4 py-3">
+              <p className="text-sm text-muted">Enter를 누르면 등록된 PC에서 찾아요.</p>
+              {agentStatus === 'offline' && deviceOfflineHint}
+            </div>
           ) : fileSearchTask.phase === 'running' ? (
             <LoadingIndicator
               className="px-4 py-3"
@@ -1050,7 +1082,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
       {showStatusCommand && (
         <div className="overflow-hidden rounded-xl border border-hairline bg-surface p-4 text-left">
-          {statusTask.phase === 'idle' && <p className="text-sm text-muted">Enter를 누르면 이 PC의 상태를 확인해요.</p>}
+          {statusTask.phase === 'idle' && (
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-muted">Enter를 누르면 이 PC의 상태를 확인해요.</p>
+              {agentStatus === 'offline' && deviceOfflineHint}
+            </div>
+          )}
           {statusTask.phase === 'running' && (
             <LoadingIndicator label={TASK_STATUS_LABELS[statusTask.status] ?? '처리하는 중이에요'} />
           )}
@@ -1102,36 +1139,21 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
 
       {showCommandModeHint && <p className="pl-4 text-left text-xs text-accent-blue">{commandModeHint}</p>}
 
+      {showDeviceOfflineCommandHint && <div className="pl-4">{deviceOfflineHint}</div>}
+
       {showWebGpuUnsupportedHint && (
         <p className="pl-4 text-left text-xs text-accent-blue">
           이 브라우저는 WebLLM을 지원하지 않아 서버에서 요약해요.
         </p>
       )}
 
-      {/* 자유 입력은 `/모델`에서 고른 모델로 간다 — 그 선택이 실제로 어디에 쓰이는지 보이는 유일한
-          자리이므로, 모델 이름을 고정 문구("로컬 LLM") 대신 여기에 그대로 적는다. 조사는 사용자가
-          친 문장과 모델 이름 둘 다 뒤에 붙으므로 '이(가)'와 같은 병기 형태로 둔다 — 모델 이름이
-          'o3', 'Gemini 3 Flash'처럼 받침 여부가 제각각이라 하나로 정할 수 없다.
-          자유 입력은 로컬 에이전트를 거쳐 백엔드로 가므로, 에이전트가 꺼져있으면 보낼 곳 자체가
-          없다는 걸 여기서 바로 알려준다 (§ Settings > 연동 > 지정 PC 관리). */}
-      {isFreeText &&
-        freeTextTask.phase === 'idle' &&
-        (agentStatus === 'offline' ? (
-          <p className="pl-4 text-left text-xs text-accent-blue">
-            로컬 에이전트가 꺼져있어서 요청을 보낼 수 없어요 ·{' '}
-            <button
-              type="button"
-              onClick={() => navigate({ pathname: location.pathname, hash: '#settings/plugins' })}
-              className="underline underline-offset-2 hover:brightness-110"
-            >
-              PC 관리에서 확인하기
-            </button>
-          </p>
-        ) : (
-          <p className="pl-4 text-left text-xs text-muted">
-            '{trimmed}'이(가) {modelDestination}에 요청됩니다.
-          </p>
-        ))}
+      {/* 슬래시 없는 자유 입력은 아직 서버가 처리하지 않는다(slash-nlu는 P0 4개 명령의 자연어 인식만
+          지원하고, 일반 질의응답은 계약에 없어 UNSUPPORTED로 떨어진다) — 전송하지 않고 안내만 한다. */}
+      {isFreeText && freeTextTask.phase === 'idle' && (
+        <p className="pl-4 text-left text-xs text-muted">
+          자연어 입력은 아직 지원하지 않아요 · '/'로 명령어를 입력해주세요.
+        </p>
+      )}
         </div>
       )}
     </div>
