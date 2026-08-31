@@ -502,34 +502,21 @@ export function SettingsDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-48 shrink-0 space-y-0.5 border-r border-hairline p-2">
-          {CATEGORIES.map(({ id, label, icon: Icon, disabled }) =>
-            disabled ? (
-              <button
-                key={id}
-                type="button"
-                disabled
-                title="아직 준비 중이에요"
-                className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted opacity-50"
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ) : (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onActiveChange(id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  active === id
-                    ? 'bg-foreground/10 text-foreground'
-                    : 'text-muted hover:bg-foreground/6 hover:text-foreground'
-                }`}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ),
-          )}
+          {CATEGORIES.filter(({ disabled }) => !disabled).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onActiveChange(id)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                active === id
+                  ? 'bg-foreground/10 text-foreground'
+                  : 'text-muted hover:bg-foreground/6 hover:text-foreground'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="relative flex-1 overflow-y-auto p-6">
