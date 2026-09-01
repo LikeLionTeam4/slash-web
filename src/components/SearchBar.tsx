@@ -170,6 +170,12 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
   const compositionEndedAtRef = useRef(0)
   // 조합 확정에 먹힌 Enter가 있었는지 — 같은 키의 keyup에서 실제 동작을 실행하기 위한 표시.
   const pendingEnterRef = useRef(false)
+  // Windows Chrome + 한글 IME는 조합을 확정하는 Enter 한 번에 keydown/keyup 쌍을 두 번 보낸다 —
+  // 첫 쌍(keyCode 229, isComposing:true)은 위 pendingEnterRef로 keyup에서 실행되고, 곧바로
+  // isComposing:false인 두 번째 "진짜" keydown이 이어져 같은 동작을 한 번 더 실행시킨다. 이게
+  // /네이버·/구글처럼 window.open을 부르는 명령에서 새 탭이 두 개 뜨는 원인이다. 이 시각을 남겨두고
+  // 곧바로 이어지는 non-composing Enter는 새 입력이 아니라 그 잔여 dispatch로 보고 건너뛴다.
+  const composedEnterRanAtRef = useRef(0)
 
   const trimmed = value.trim()
   const hasText = trimmed.length > 0
@@ -617,6 +623,15 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
         pendingEnterRef.current = true
         return
       }
+      // 위 composedEnterRanAtRef 주석 참고 — 방금 keyup에서 조합-확정 Enter를 이미 실행했다면,
+      // 지금 이 non-composing keydown은 같은 물리 키 입력이 보낸 두 번째 dispatch일 확률이 높다.
+      // 새 입력으로 다시 실행하지 않고 한 번만 건너뛴다(다음 진짜 Enter는 정상 동작해야 하므로
+      // 플래그를 바로 지운다).
+      if (Date.now() - composedEnterRanAtRef.current < 100) {
+        composedEnterRanAtRef.current = 0
+        e.preventDefault()
+        return
+      }
       e.preventDefault()
       runEnterAction()
       return
@@ -697,6 +712,9 @@ export function SearchBar({ presetQuery }: { presetQuery?: { path: string[]; ope
     pendingEnterRef.current = false
     e.preventDefault()
     runEnterAction()
+    // 위 composedEnterRanAtRef 주석 참고 — Windows Chrome + 한글 IME가 곧이어 보낼 수 있는
+    // 두 번째(진짜) Enter keydown이 같은 동작을 또 실행하지 않도록 시각을 남긴다.
+    composedEnterRanAtRef.current = Date.now()
   }
 
   function removeAttachment(id: string) {
